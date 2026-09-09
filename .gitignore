@@ -1,0 +1,22 @@
+# Generated JVM and native artifacts
+build/
+**/build/
+out/
+**/out/
+target/
+**/target/
+
+# Local test results and runtime state
+*.class
+*.map
+*.log
+__pycache__/
+*.py[cod]
+
+# Local development settings
+.idea/
+.vscode/
+.gradle/
+.codex/
+.gemini/
+*.iml

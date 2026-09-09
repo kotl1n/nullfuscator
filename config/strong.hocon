@@ -1,0 +1,34 @@
+# Bounded high-strength profile. It inherits full, then lowers its most costly passes.
+baseConfig = "full.hocon"
+
+semanticFabric { percent: 30, maxMethods: 48, carriers: 6 }
+numberEncryption { layers: 3 }
+flowSwitch { enabled: false }
+integerReturn { enabled: false }
+exceptionReturn { percent: 25 }
+antiAI { level: 2, decoyMethods: 3, constantEncodingPercent: 35 }
+crossClassDispersion {
+  dispersalPercent: 30, sinks: 8, variantsPerOpcode: 1
+  maxHelpers: 256, maxOperations: 2048, maxPerClass: 128
+}
+methodRelocation { percent: 30, maxMethods: 48, carriers: 8 }
+methodExtraction { percent: 30, maxMethods: 64, carriers: 8 }
+referenceHiding { hidePercent: 35 }
+antiDebug { checkPercent: 10, detectors: 3 }
+flatten { percent: 25 }
+fieldIndirection { percent: 30 }
+
+hotPaths.exclude = [
+  "annotation{(^|/)Hot(Path)?$}",
+  "annotation{org/spongepowered/asm/mixin/}"
+]
+budgets {
+  jarGrowthAllowanceBytes: 131072
+  classGrowthAllowance: 48
+  methodGrowthAllowance: 1024
+  instructionGrowthAllowance: 30000
+  maxJarGrowthPercent: 400
+  maxClassGrowthPercent: 20
+  maxMethodGrowthPercent: 150
+  maxInstructionGrowthPercent: 500
+}

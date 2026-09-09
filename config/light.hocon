@@ -1,0 +1,21 @@
+# Low-cost release profile. Expected ceilings are enforced for each input JAR.
+sourceStrip { enabled: true, stripLineNumbers: false, stripLocalVars: true, stripSignatures: false }
+classRenamer { enabled: true, renameMain: false, depth: 5 }
+methodRenamer { enabled: true, renameVirtual: false, renamePublic: false, depth: 5 }
+fieldRenamer { enabled: true, depth: 5 }
+stringEncryption { enabled: true, type: STANDARD }
+
+hotPaths.exclude = [
+  "annotation{(^|/)Hot(Path)?$}",
+  "annotation{org/spongepowered/asm/mixin/}"
+]
+budgets {
+  jarGrowthAllowanceBytes: 32768
+  classGrowthAllowance: 1
+  methodGrowthAllowance: 8
+  instructionGrowthAllowance: 128
+  maxJarGrowthPercent: 35
+  maxClassGrowthPercent: 0
+  maxMethodGrowthPercent: 5
+  maxInstructionGrowthPercent: 30
+}
