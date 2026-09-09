@@ -1,0 +1,40 @@
+// Apply from a Java/Fabric project with:
+// apply from: "../path/to/nullfuscator-obfuscate.gradle"
+// Invoke with: ./gradlew obfuscateJar -Pnullfuscator.jar=/absolute/path/nullfuscator-obf.jar
+
+def nullfuscatorJarPath = findProperty("nullfuscator.jar")
+if (nullfuscatorJarPath == null) throw new GradleException("Set -Pnullfuscator.jar=/absolute/path/to/nullfuscator-obf.jar")
+def nullfuscatorJar = file(nullfuscatorJarPath)
+def nullfuscatorConfig = layout.projectDirectory.file("config/nullfuscator.hocon")
+def nullfuscatorSeed = providers.gradleProperty("nullfuscator.seed").orElse("1337")
+def obfuscatedJar = layout.buildDirectory.file("libs/${project.name}-${project.version}-obf.jar")
+def mappingFile = layout.buildDirectory.file("nullfuscator/${project.name}-${project.version}.map")
+def reportFile = layout.buildDirectory.file("reports/nullfuscator/report.json")
+
+tasks.register("obfuscateJar", Exec) {
+    dependsOn(tasks.named("jar"))
+
+    def jarTask = tasks.named("jar")
+    inputs.file(jarTask.flatMap { it.archiveFile })
+    inputs.file(nullfuscatorJar)
+    inputs.file(nullfuscatorConfig)
+    inputs.files(configurations.runtimeClasspath)
+    inputs.property("seed", nullfuscatorSeed)
+    outputs.file(obfuscatedJar)
+    outputs.file(mappingFile)
+    outputs.file(reportFile)
+
+    doFirst {
+        def command = ["java", "-jar", nullfuscatorJar.absolutePath,
+                       "--input", jarTask.get().archiveFile.get().asFile.absolutePath,
+                       "--output", obfuscatedJar.get().asFile.absolutePath,
+                       "--config", nullfuscatorConfig.asFile.absolutePath,
+                       "--mapping", mappingFile.get().asFile.absolutePath,
+                       "--report", reportFile.get().asFile.absolutePath,
+                       "--seed", nullfuscatorSeed.get()]
+        configurations.runtimeClasspath.files.sort { a, b -> a.name <=> b.name }.each {
+            command.addAll(["--lib", it.absolutePath])
+        }
+        commandLine(command)
+    }
+}

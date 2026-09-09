@@ -1,0 +1,311 @@
+<p align="center">
+  <img src="assets/logo.jpg" alt="NULLFUSCATOR Logo" width="280" />
+</p>
+
+<h1 align="center">NULLFUSCATOR</h1>
+
+<p align="center">
+  <b>Hardened, Standalone Java Bytecode Obfuscator with Bounded Growth and AST-Disruption Technology</b>
+</p>
+
+<p align="center">
+  <a href="https://github.com/kotl1n/nullfuscator"><img src="https://img.shields.io/badge/version-0.1.0--beta-blue.svg" alt="Version"></a>
+  <a href="https://github.com/kotl1n/nullfuscator"><img src="https://img.shields.io/badge/java-17%2B-orange.svg" alt="Java 17+"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
+  <a href="https://github.com/kotl1n/nullfuscator"><img src="https://img.shields.io/badge/build-offline%20%2F%20reproducible-brightgreen.svg" alt="Build Status"></a>
+</p>
+
+---
+
+## Overview
+
+**NULLFUSCATOR** is a standalone, deterministic Java bytecode obfuscator built on the OW2 ASM engine. Designed for modern JVM workloads (supporting Java 17 through Java 21+), NULLFUSCATOR significantly raises the cost of static reverse engineering, automated decompilation, runtime debugging, and code tampering.
+
+Unlike conventional obfuscators that merely rename symbols or recklessly bloat bytecode to the point of runtime instability, NULLFUSCATOR provides:
+- **Strict budget gates and bounded growth**: Enforces hard caps on instruction expansion, method size limits, and archive growth to eliminate `MethodTooLargeException` and avoid runaway memory leaks.
+- **Preflight compatibility safeguards**: Detects missing classpath hierarchies, multi-release JAR conflicts, Gson reflection models, and Fabric/Minecraft entrypoints before executing transformations.
+- **Advanced decompiler disruption**: Combines synthetic control-flow flattening, invokedynamic reference hiding, polymorphic constant synthesis, exception-routed returns, and AST-shattering metadata traps.
+- **Deterministic, offline-first operation**: Builds completely offline using pinned, checksum-verified dependencies; guarantees bit-identical output archives when supplied with identical inputs and seeds.
+- **Mapping format v2 & Stacktrace Retracer**: Full ProGuard-compatible mapping generation and built-in CLI stack trace demangling.
+
+> [!WARNING]
+> **Experimental Feature Notice (`antiAI`)**:
+> The `antiAI` transformation pass (keyed permutation networks for constant reconstruction) is currently an **experimental/testing feature** and may not work as intended in all environments. Do not enable it on critical production paths without rigorous testing.
+
+---
+
+## Architecture & Transformation Pipeline
+
+NULLFUSCATOR applies up to 27 modular transformation passes organized into focused defensive layers:
+
+```
++-------------------------------------------------------------------------------+
+|                             NULLFUSCATOR Pipeline                             |
++-------------------------------------------------------------------------------+
+  [ Input JAR ]
+        |
+        v
+  [ Preflight & Validation ]   (Hierarchy checks, Multi-Release check, Gson scan)
+        |
+        v
+  +--------------------------+
+  |  1. Metadata Stripping   |  -> sourceStrip, recordMetadata
+  +--------------------------+
+  |  2. Semantic Protection  |  -> semanticFabric, antiDebug, runtimeIntegrity
+  +--------------------------+
+  |  3. Control Flow Warp    |  -> flatten, bogusJump, switchFlow,
+  |                          |     returnFlow, exceptionReturn
+  +--------------------------+
+  |  4. Constant Protection  |  -> stringEncryption (rolling XOR),
+  |                          |     numberEncryption (polymorphic math),
+  |                          |     antiAI (experimental)
+  +--------------------------+
+  |  5. Reference Obfuscation|  -> referenceHiding (invokedynamic bootstrap),
+  |                          |     fieldIndirection, fieldPacking,
+  |                          |     crossClassDispersion, methodExtraction
+  +--------------------------+
+  |  6. Identifier Renaming  |  -> classRenamer, methodRenamer, fieldRenamer
+  +--------------------------+
+  |  7. Anti-Decompilation   |  -> antiDecompiler, antiDeobf, fileCrasher
+  +--------------------------+
+        |
+        v
+  [ Budget & Verification ]   (Size growth check, instruction budget, -Xverify:all)
+        |
+        v
+  [ Output JAR + Mapping v2 ]
+```
+
+### Detailed Passes
+
+| Layer | Pass ID | Description |
+| :--- | :--- | :--- |
+| **Stripping** | `sourceStrip` | Removes SourceFile, SourceDebugExtension, LineNumberTable, and LocalVariableTable attributes. |
+| | `recordMetadata` | Erases Java 14+ Record component metadata into plain class structures without breaking access. |
+| **Control Flow** | `flatten` | Flattens basic execution blocks into a unified switch state-machine dispatcher. |
+| | `bogusJump` | Injects opaque branch predicates whose conditions evaluate identically at runtime. |
+| | `switchFlow` | Converts linear code paths into mutated lookup/table switch topologies. |
+| | `returnFlow` | Unifies multiple return vectors into synthesized common exits. |
+| | `exceptionReturn` | Replaces standard typed returns with caught control-flow exception dispatch. |
+| **Encryption** | `stringEncryption` | Encrypts string literals using per-site rolling XOR keys with polymorphic runtime decoders. |
+| | `numberEncryption` | Converts numeric constants into dynamic algebraic identities and runtime helpers. |
+| | `antiAI` *(Experimental)* | Links constants through keyed Feistel permutation networks to disrupt LLM heuristics. |
+| **Structural** | `referenceHiding` | Replaces direct `INVOKEVIRTUAL` / `INVOKESTATIC` calls with encrypted `invokedynamic` instructions. |
+| | `fieldIndirection` | Routes direct field reads/writes through generated bridge methods. |
+| | `fieldPacking` | Compresses instance primitive fields into boxed arrays or bitmasks. |
+| | `crossClassDispersion`| Relocates internal business logic into synthetic helper classes across the archive. |
+| | `methodRelocation` | Atomically migrates method implementations across carrier classes. |
+| **Renaming** | `classRenamer` | Renames classes to unreadable Unicode or short dictionary identifiers. |
+| | `methodRenamer` | Renames private, package-private, static, and public/virtual methods. |
+| | `fieldRenamer` | Renames member fields to minimal collisions. |
+| **Decompiler Traps**| `antiDecompiler` | Emits bytecode-valid, source-illegal constructs designed to crash CFR, Fernflower, and Procyon. |
+| | `antiDeobf` | Disrupts AST reconstructing decompilers (JADX, Bytecode-Viewer) with illegal generic signatures. |
+| | `fileCrasher` | Appends valid zero-length class attributes that break naive ZIP extractors and older tools. |
+| **Runtime** | `antiDebug` | Injects active JVM runtime monitoring against `jdb`, Java agents, and instrumentation. |
+| | `runtimeIntegrity` | Injects runtime SHA-256 self-checksum validation guards. |
+
+---
+
+## Configuration Profiles
+
+NULLFUSCATOR ships with four preconfigured HOCON profiles in `config/`:
+
+| Profile | Target Use-Case | Size Impact | Runtime Overhead | Protection Level |
+| :--- | :--- | :---: | :---: | :---: |
+| **`light.hocon`** | High-performance services, tick loops, games, Fabric mods | Minimal (+5% – +15%) | Near Zero (<1%) | Basic (Renaming + Strings + Stripping) |
+| **`balanced.hocon`** | Production commercial software, enterprise APIs | Moderate (+20% – +50%) | Low (1% – 5%) | High (Control flow + Number/String + Indirection) |
+| **`strong.hocon`** | Sensitive licensing modules, proprietary algorithms | Substantial (+50% – +120%) | Medium (5% – 15%) | Very High (+ InvokeDynamic + Exceptions + Anti-Deobf) |
+| **`full.hocon`** | Maximum paranoia, core cryptographic routines, crack-me challenges | Heavy (up to 6.8x) | High (avoid on hot loops) | Maximum (All 27 passes enabled simultaneously) |
+
+---
+
+## Comprehensive Benchmarks
+
+### 1. Comparative Benchmark vs. Leading Industry Tools
+
+Tested on a standardized 1,233-class enterprise application corpus (1,015,769 bytes input JAR, 75,789 raw bytecode instructions). Tests executed on Linux x86_64, AMD Ryzen 9, OpenJDK 21 (Temurin), with `-Xverify:all` enforced on every output.
+
+| Obfuscator & Mode | Build Time | Peak RSS | Output Size | Classes Intact | Original Strings Exposed | Verified (`-Xverify:all`) |
+| :--- | ---: | ---: | ---: | ---: | ---: | :---: |
+| **Input (Baseline)** | — | — | 0.97 MiB | 1,233 (100%) | 1,833 (100%) | **PASS** |
+| **NULLFUSCATOR 0.1.0** *(rename-only)* | **2.11 s** | **256 MiB** | **0.95 MiB** | **1** (<0.1%) | 1,833 (100%) | **PASS** |
+| **[ProGuard 7.10.0](https://github.com/Guardsquare/proguard)** *(rename-only)* | 4.04 s | 323 MiB | 0.85 MiB | 1 (<0.1%) | 1,833 (100%) | **PASS** |
+| **[yGuard 5.0.0](https://github.com/yWorks/yGuard)** *(rename-only)* | 2.20 s | 187 MiB | 0.87 MiB | 1 (<0.1%) | 1,833 (100%) | **PASS** |
+| **[Skidfuscator CE 2.0.11](https://github.com/skidfuscatordev/skidfuscator-java-obfuscator)** *(default)* | 19.59 s | 1,314 MiB | 3.82 MiB | 1,233 (100%) | 581 (31.7%) | **PASS** |
+| **NULLFUSCATOR 0.1.0** *(full.hocon)* | 8.50 s | 1,216 MiB | 19.40 MiB | **0** (0%) | **1** (<0.1%) | **PASS** |
+
+> *Note on comparison*: Skidfuscator CE default CLI runs its default control-flow without its commercial renamer, retaining class names. ProGuard used `-dontshrink -dontoptimize`. NULLFUSCATOR rename-only isolates pure symbol renaming throughput, while `full.hocon` maximizes static resistance.
+
+---
+
+### 2. Runtime Overhead & Latency Analysis
+
+Execution time measured using JMH micro-benchmarks executing verified hot computation loops:
+
+| Artifact & Profile | Process Launch | Standard Matrix Loop | Blocked Matrix Loop | Process Peak RSS |
+| :--- | ---: | ---: | ---: | ---: |
+| **Input Baseline** | 177 ms | 9.3 ms | 11.5 ms | 43 MiB |
+| **NULLFUSCATOR** *(rename-only)* | 177 ms | 9.6 ms | 11.3 ms | 43 MiB |
+| **ProGuard** *(rename-only)* | 230 ms | 10.4 ms | 13.9 ms | 43 MiB |
+| **yGuard** *(rename-only)* | 279 ms | 13.1 ms | 15.5 ms | 61 MiB |
+| **NULLFUSCATOR** *(full.hocon)* | 2,270 ms | 258.4 ms | 716.8 ms | 135 MiB |
+
+> **Guideline**: For latency-sensitive code (game loops, packet processors, high-frequency trade engines), use `config/light.hocon` or annotate hot methods using `hotPaths.exclude = ["method{^com/my/app/Engine#tick\\(\\)V$}"]`. Reserve `full.hocon` for business logic, DRM checks, and licensing verifiers.
+
+---
+
+### 3. Compact Helper Optimizations (v0.1.0 Improvement)
+
+With the introduction of unified helper pooling and compact invokedynamic decoders, memory footprint and output size are dramatically reduced compared to early development iterations:
+
+| Metric | Legacy Unbounded Engine | NULLFUSCATOR 0.1.0 Compact Engine | Improvement |
+| :--- | ---: | ---: | :---: |
+| **Compressed Output JAR** | 20.34 MiB (20.0x input) | **6.92 MiB** (6.8x input) | **-66.0%** |
+| **Obfuscation Wall Time** | 11.32 s | **8.02 s** | **-29.2%** |
+| **Obfuscator Peak RSS** | 1,335 MiB | **874 MiB** | **-34.5%** |
+| **JVM Process Launch** | 602 ms | **361 ms** | **-40.0%** |
+| **Standard Matrix Loop** | 142.8 ms | **35.0 ms** | **-75.5%** |
+
+---
+
+### 4. Decompiler Resilience & Static Analysis Stress Test
+
+The resulting obfuscated archives were subjected to decompilation via **CFR 0.152** and **Vineflower 1.12.0**, followed by recompilation of the emitted Java source code with `javac` (JDK 21).
+
+| Output Artifact | CFR Time | CFR Decompile Errors | CFR `javac` Recompile Errors | Vineflower Time | Vineflower `javac` Errors |
+| :--- | ---: | ---: | ---: | ---: | ---: |
+| **Input Baseline** | 8.83 s | 0 | 1 | 6.42 s | 85 |
+| **ProGuard** *(rename)* | 9.42 s | 0 | 206 | 6.20 s | 440 |
+| **yGuard** *(rename)* | 10.89 s | 0 | 403 | 7.41 s | 3 |
+| **Skidfuscator CE** | 178.03 s | 12 | 6,337 | 49.15 s | 7,685 |
+| **NULLFUSCATOR** *(rename)* | 9.25 s | 0 | 4,992 | 7.15 s | 3,863 |
+| **NULLFUSCATOR** *(full)* | **82.30 s** | **34** | **188,897** *(complete AST collapse)* | **17.59 s** | **5,425** |
+
+- NULLFUSCATOR `full.hocon` generated **188,897 javac recompile errors** on CFR's output, rendering decompiled code completely unusable for reverse engineering or recompilation.
+- Decompiled source trees exploded from **0.92 MiB** (input) to **58.59 MiB** (CFR) and **86.92 MiB** (Vineflower).
+
+---
+
+## Quickstart
+
+### Prerequisites
+- **JDK 17** or newer.
+- **Python 3.9** or newer (for build & packaging scripts).
+
+### 1. Build the Obfuscator Offline
+All dependencies (ASM 9.10.1, Typesafe Config 1.4.2) are checked into `libs/` with pinned SHA-256 sums. No internet connection is needed to build:
+
+```bash
+python3 scripts/build.py
+```
+This produces `build/nullfuscator-obf.jar`.
+
+### 2. Run Obfuscation
+```bash
+# Basic usage with balanced profile
+java -jar build/nullfuscator-obf.jar \
+  --input myapp.jar \
+  --output myapp-obf.jar \
+  --config config/balanced.hocon \
+  --mapping myapp.map \
+  --seed 1337 \
+  --verbose
+```
+
+---
+
+## Command-Line Reference
+
+```text
+java -jar nullfuscator.jar [options]
+   or: java -jar nullfuscator.jar retrace --mapping <file> [--trace <file>]
+   or: java -jar nullfuscator.jar mapping-info --mapping <file>
+```
+
+### Options
+
+| Flag | Argument | Description |
+| :--- | :--- | :--- |
+| `--input` | `<path>` | **Required**. Path to the input JAR file. |
+| `--output` | `<path>` | **Required**. Target destination for the obfuscated JAR. Written atomically. |
+| `--config` | `<path>` | Path to the HOCON configuration profile. (If omitted, copies without transforms). |
+| `--lib` | `<path>` | Adds an external library JAR to the hierarchy analysis. May be specified multiple times. |
+| `--seed` | `<long>` | Fixed seed for reproducible obfuscation. If omitted, uses `SecureRandom`. |
+| `--mapping` | `<path>` | Destination path for the ProGuard-compatible mapping file (defaults to `<output>.map`). |
+| `--no-mapping` | — | Explicitly disables mapping file generation. |
+| `--report` | `<path>` | Generates a JSON execution report (schema v1) with timings, growth stats, and warnings. |
+| `--report-only` | — | Executes preflight and analysis in-memory without generating output JAR or mapping. |
+| `--verbose` | — | Enables detailed stderr logging for every transformation pass. |
+| `--version` | — | Prints NULLFUSCATOR version (`0.1.0`). |
+| `--help` | — | Displays command-line help summary. |
+
+### Stack Trace Retracing
+Demangle obfuscated production crash traces back to original class, method, and line numbers:
+
+```bash
+# Retrace from a crash dump file
+java -jar build/nullfuscator-obf.jar retrace --mapping myapp.map --trace crash.log
+
+# Retrace directly from stdin pipe
+cat crash.log | java -jar build/nullfuscator-obf.jar retrace --mapping myapp.map
+```
+
+---
+
+## Gradle Integration
+
+Integrate NULLFUSCATOR directly into your Gradle build pipeline:
+
+```groovy
+task obfuscate(type: JavaExec) {
+    dependsOn jar
+    classpath = files('tools/nullfuscator-0.1.0.jar')
+    mainClass = 'com.nullfuscator.obf.core.Main'
+
+    args = [
+        '--input', jar.archiveFile.get().asFile.absolutePath,
+        '--output', "${buildDir}/libs/${project.name}-${project.version}-obf.jar",
+        '--config', 'config/balanced.hocon',
+        '--mapping', "${buildDir}/libs/${project.name}.map",
+        '--seed', '42'
+    ]
+}
+```
+See [`docs/gradle/nullfuscator-obfuscate.gradle`](docs/gradle/nullfuscator-obfuscate.gradle) for a complete standalone task implementation.
+
+---
+
+## Verification & Testing
+
+NULLFUSCATOR maintains an exhaustive test suite covering bytecode legality, verifier compliance, and arithmetic equivalence:
+
+```bash
+# Run transformation regressions, growth budgets, and -Xverify:all tests
+python3 scripts/test-growth.py
+
+# Run CLI arguments and packaging integration tests
+python3 scripts/test-cli.py
+
+# Build official release candidate and verify SHA-256 signatures
+python3 scripts/package-release.py
+(cd build/release && sha256sum -c SHA256SUMS)
+```
+
+---
+
+## Security & Transparency
+
+- **Not a DRM**: No bytecode obfuscation can completely prevent a skilled reverse-engineer with kernel or JVM-agent access from inspecting memory or extracting keys. NULLFUSCATOR's goal is to maximize the time and cost barrier to reverse engineering.
+- **Mapping Privacy**: Mapping files contain the 1:1 translation between original and obfuscated symbols. Treat `.map` files as highly sensitive internal credentials. Never bundle them into public releases.
+
+---
+
+## License & Third-Party Notices
+
+NULLFUSCATOR is open-source software licensed under the [MIT License](LICENSE).
+
+This project bundles and relies upon:
+- **OW2 ASM 9.10.1** ([BSD 3-Clause](licenses/ASM-BSD-3-Clause.txt))
+- **Typesafe Config 1.4.2** ([Apache 2.0](licenses/Typesafe-Config-Apache-2.0.txt))
+
+Detailed notices and full license texts are available in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

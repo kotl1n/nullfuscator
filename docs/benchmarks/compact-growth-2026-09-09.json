@@ -1,0 +1,178 @@
+{
+  "inputBytes": 1015769,
+  "inputSha256": "280814d59a5b888b9689bfa02c81db0e98d3a18094b5e15bada21817485a65e6",
+  "seed": 1337,
+  "warmups": 1,
+  "runs": 3,
+  "java": "openjdk version \"21.0.12.1\" 2026-08-18\nOpenJDK Runtime Environment (build 21.0.12.1+1)\nOpenJDK 64-Bit Server VM (build 21.0.12.1+1, mixed mode, sharing)\n",
+  "platform": "Linux-7.1.10-arch1-1-x86_64-with-glibc2.44",
+  "samples": {
+    "before": [
+      {
+        "seconds": 11.290539320999983,
+        "peakRssMiB": 1359.8359375,
+        "outputBytes": 20338129,
+        "sha256": "66d40dfaa0843838ccb862f3d1042bdd14dfb844851b706fd16580a774524fbd"
+      },
+      {
+        "seconds": 11.796919235000018,
+        "peakRssMiB": 1211.078125,
+        "outputBytes": 20338129,
+        "sha256": "66d40dfaa0843838ccb862f3d1042bdd14dfb844851b706fd16580a774524fbd"
+      },
+      {
+        "seconds": 11.316489015999991,
+        "peakRssMiB": 1335.1796875,
+        "outputBytes": 20338129,
+        "sha256": "66d40dfaa0843838ccb862f3d1042bdd14dfb844851b706fd16580a774524fbd"
+      }
+    ],
+    "after": [
+      {
+        "seconds": 7.790239853999992,
+        "peakRssMiB": 888.03515625,
+        "outputBytes": 6926043,
+        "sha256": "a04b8c02477036197568389ec8be45b1e2c2193032306676ba32e42443b0bdb3"
+      },
+      {
+        "seconds": 8.01729615599993,
+        "peakRssMiB": 874.12890625,
+        "outputBytes": 6926043,
+        "sha256": "a04b8c02477036197568389ec8be45b1e2c2193032306676ba32e42443b0bdb3"
+      },
+      {
+        "seconds": 8.29990804800002,
+        "peakRssMiB": 863.7109375,
+        "outputBytes": 6926043,
+        "sha256": "a04b8c02477036197568389ec8be45b1e2c2193032306676ba32e42443b0bdb3"
+      }
+    ]
+  },
+  "tools": {
+    "before": {
+      "path": "build/growth-fix/before-tool.jar",
+      "sha256": "75b2e370ae11a20a517ddfd724628eee6d0cc71e55350aacdf7d4929aa609a95"
+    },
+    "after": {
+      "path": "build/nullfuscator-obf.jar",
+      "sha256": "4ef0f5b6ffc8ced5152d554f00dc9a50d535b815e621903c49f83d7a661aa3db"
+    }
+  },
+  "configSha256": "c5f8264eae7945ade3682a2cc9a2b63cd24b951043193d42fcf69547858c583e",
+  "before": {
+    "seconds": 11.316489015999991,
+    "peakRssMiB": 1335.1796875,
+    "outputBytes": 20338129,
+    "ratio": 20.022395839999056,
+    "runtimeSamples": [
+      {
+        "processSeconds": 0.587423276000095,
+        "standardMs": 137.386416,
+        "blockedMs": 211.108304
+      },
+      {
+        "processSeconds": 0.5814737880000393,
+        "standardMs": 134.386631,
+        "blockedMs": 199.700897
+      },
+      {
+        "processSeconds": 0.712281106999967,
+        "standardMs": 154.189904,
+        "blockedMs": 218.134057
+      },
+      {
+        "processSeconds": 0.601536268000018,
+        "standardMs": 142.75643,
+        "blockedMs": 214.122707
+      },
+      {
+        "processSeconds": 0.7441128509999544,
+        "standardMs": 158.661617,
+        "blockedMs": 239.412212
+      }
+    ],
+    "runtimeMedian": {
+      "processSeconds": 0.601536268000018,
+      "standardMs": 142.75643,
+      "blockedMs": 214.122707
+    }
+  },
+  "after": {
+    "seconds": 8.01729615599993,
+    "peakRssMiB": 874.12890625,
+    "outputBytes": 6926043,
+    "ratio": 6.818521730826595,
+    "runtimeSamples": [
+      {
+        "processSeconds": 0.3401186889999508,
+        "standardMs": 35.326406,
+        "blockedMs": 85.918942
+      },
+      {
+        "processSeconds": 0.3607557740000402,
+        "standardMs": 34.409038,
+        "blockedMs": 86.908184
+      },
+      {
+        "processSeconds": 0.3773394309999958,
+        "standardMs": 38.979625,
+        "blockedMs": 90.362241
+      },
+      {
+        "processSeconds": 0.35914511900000434,
+        "standardMs": 34.824215,
+        "blockedMs": 102.076702
+      },
+      {
+        "processSeconds": 0.392656106000004,
+        "standardMs": 34.95505,
+        "blockedMs": 110.656174
+      }
+    ],
+    "runtimeMedian": {
+      "processSeconds": 0.3607557740000402,
+      "standardMs": 34.95505,
+      "blockedMs": 90.362241
+    }
+  },
+  "input": {
+    "runtimeSamples": [
+      {
+        "processSeconds": 0.16466311199997108,
+        "standardMs": 9.419896,
+        "blockedMs": 11.250813
+      },
+      {
+        "processSeconds": 0.14086463799992543,
+        "standardMs": 8.229506,
+        "blockedMs": 10.557135
+      },
+      {
+        "processSeconds": 0.15624095400005444,
+        "standardMs": 9.01115,
+        "blockedMs": 11.239252
+      },
+      {
+        "processSeconds": 0.14337031799993838,
+        "standardMs": 8.051674,
+        "blockedMs": 10.332965
+      },
+      {
+        "processSeconds": 0.1715606850000313,
+        "standardMs": 10.913291,
+        "blockedMs": 12.585141
+      }
+    ],
+    "runtimeMedian": {
+      "processSeconds": 0.15624095400005444,
+      "standardMs": 9.01115,
+      "blockedMs": 11.239252
+    }
+  },
+  "jvmOptions": [
+    "-Xmx2g"
+  ],
+  "runtimeWarmups": 1,
+  "runtimeRuns": 5,
+  "configuration": "config/full.hocon"
+}

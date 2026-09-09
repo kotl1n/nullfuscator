@@ -1,0 +1,28 @@
+# Moderate protection with bounded generated code. Add application hot paths below.
+sourceStrip { enabled: true, stripLineNumbers: true, stripLocalVars: true, stripSignatures: false }
+classRenamer { enabled: true, renameMain: false, depth: 6 }
+methodRenamer { enabled: true, renameVirtual: false, renamePublic: false, depth: 6 }
+fieldRenamer { enabled: true, depth: 6 }
+stringEncryption { enabled: true, type: POLYMORPHIC }
+numberEncryption { enabled: true, layers: 2 }
+safeControlFlow { enabled: true, level: 1 }
+crossClassDispersion {
+  enabled: true, dispersalPercent: 20, sinks: 4
+  variantsPerOpcode: 1, maxHelpers: 96, maxOperations: 512, maxPerClass: 64
+}
+referenceHiding { enabled: true, hidePercent: 15 }
+
+hotPaths.exclude = [
+  "annotation{(^|/)Hot(Path)?$}",
+  "annotation{org/spongepowered/asm/mixin/}"
+]
+budgets {
+  jarGrowthAllowanceBytes: 65536
+  classGrowthAllowance: 4
+  methodGrowthAllowance: 64
+  instructionGrowthAllowance: 1024
+  maxJarGrowthPercent: 120
+  maxClassGrowthPercent: 10
+  maxMethodGrowthPercent: 35
+  maxInstructionGrowthPercent: 150
+}
