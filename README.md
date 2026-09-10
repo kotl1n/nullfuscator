@@ -121,56 +121,25 @@ NULLFUSCATOR ships with four preconfigured HOCON profiles in `config/`:
 
 ---
 
-## Comprehensive Benchmarks
+## Reproducible Profile Benchmark
 
-### 1. Comparative Benchmark vs. Leading Industry Tools
+Run `python3 scripts/benchmark.py` after building the tool. The script generates a two-class Java 17 fixture with eight integer arithmetic/bitwise kernels and a non-eligible long-arithmetic method, transforms it with a fixed seed, verifies every result with `-Xverify:all`, and reports the median of three runs.
 
-Tested on a standardized 1,233-class enterprise application corpus (1,015,769 bytes input JAR, 75,789 raw bytecode instructions). Tests executed on Linux x86_64, AMD Ryzen 9, OpenJDK 21 (Temurin), with `-Xverify:all` enforced on every output.
+The measurements below were recorded for 0.2.0 on Linux x86_64, AMD Ryzen 7 7735HS, OpenJDK 21.0.12. The input archive is 6.98 KiB. They compare profiles on the same fixture; they are not a comparison with other obfuscators or a prediction for an application workload.
 
-| Obfuscator & Mode | Build Time | Peak RSS | Output Size | Classes Intact | Original Strings Exposed | Verified (`-Xverify:all`) |
-| :--- | ---: | ---: | ---: | ---: | ---: | :---: |
-| **Input (Baseline)** | — | — | 0.97 MiB | 1,233 (100%) | 1,833 (100%) | **PASS** |
-| **NULLFUSCATOR 0.2.0** *(rename-only)* | **2.11 s** | **256 MiB** | **0.95 MiB** | **1** (<0.1%) | 1,833 (100%) | **PASS** |
-| **[ProGuard 7.10.0](https://github.com/Guardsquare/proguard)** *(rename-only)* | 4.04 s | 323 MiB | 0.85 MiB | 1 (<0.1%) | 1,833 (100%) | **PASS** |
-| **[yGuard 5.0.0](https://github.com/yWorks/yGuard)** *(rename-only)* | 2.20 s | 187 MiB | 0.87 MiB | 1 (<0.1%) | 1,833 (100%) | **PASS** |
-| **[Skidfuscator CE 2.0.11](https://github.com/skidfuscatordev/skidfuscator-java-obfuscator)** *(default)* | 19.59 s | 1,314 MiB | 3.82 MiB | 1,233 (100%) | 581 (31.7%) | **PASS** |
-| **NULLFUSCATOR 0.2.0** *(full.hocon)* | **8.02 s** | **874 MiB** | **5.42 MiB** (~5.5x) | **0** (0%) | **1** (<0.1%) | **PASS** |
+| Profile | Obfuscation | Obfuscator RSS | Output | Semantic Core Methods | Process Launch | Kernel Loop | Process RSS |
+| :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| **Input baseline** | — | — | 6.98 KiB | 0 | 242.0 ms | 14.34 ms | 41.67 MiB |
+| **light** | 508.9 ms | 76.06 MiB | 7.26 KiB (+4.1%) | 0 | 253.4 ms | 17.29 ms | 41.88 MiB |
+| **balanced** | 661.6 ms | 87.59 MiB | 16.65 KiB (+138.6%) | 0 | 332.1 ms | 51.21 ms | 43.59 MiB |
+| **strong** | 1,001.8 ms | 131.47 MiB | 80.95 KiB (+1,059.9%) | 3 | 663.5 ms | 190.33 ms | 54.72 MiB |
+| **full** | 987.3 ms | 133.77 MiB | 295.75 KiB (+4,138.0%) | 3 | 3,462.9 ms | 1,397.86 ms | 88.41 MiB |
 
-> *Note on comparison*: Skidfuscator CE default CLI runs its default control-flow without its commercial renamer, retaining class names. ProGuard used `-dontshrink -dontoptimize`. NULLFUSCATOR rename-only isolates pure symbol renaming throughput, while `full.hocon` maximizes static resistance.
-
----
-
-### 2. Runtime Overhead & Latency Analysis
-
-Execution time measured using JMH micro-benchmarks executing verified hot computation loops:
-
-| Artifact & Profile | Process Launch | Standard Matrix Loop | Blocked Matrix Loop | Process Peak RSS |
-| :--- | ---: | ---: | ---: | ---: |
-| **Input Baseline** | 177 ms | 9.3 ms | 11.5 ms | 43 MiB |
-| **NULLFUSCATOR** *(rename-only)* | 177 ms | 9.6 ms | 11.3 ms | 43 MiB |
-| **ProGuard** *(rename-only)* | 230 ms | 10.4 ms | 13.9 ms | 43 MiB |
-| **yGuard** *(rename-only)* | 279 ms | 13.1 ms | 15.5 ms | 61 MiB |
-| **NULLFUSCATOR** *(full.hocon)* | 2,270 ms | 258.4 ms | 716.8 ms | 135 MiB |
-
-> **Guideline**: For latency-sensitive code (game loops, packet processors, high-frequency trade engines), use `config/light.hocon` or annotate hot methods using `hotPaths.exclude = ["method{^com/my/app/Engine#tick\\(\\)V$}"]`. Reserve `full.hocon` for business logic, DRM checks, and licensing verifiers.
+`semanticCore` is enabled through the inherited full profile, so it is active in `strong` and `full`; light and balanced intentionally report zero protected methods. The fixture is designed to exercise this pass and therefore exaggerates the overhead of high-strength profiles. Keep hot code excluded with `hotPaths.exclude`; use full protection for small, sensitive routines rather than a latency-sensitive loop.
 
 ---
 
-### 3. Compact Helper Optimizations (v0.2.0 Improvement)
-
-With the introduction of unified helper pooling and compact invokedynamic decoders, memory footprint and output size are dramatically reduced compared to early unbounded iterations:
-
-| Metric | Legacy Unbounded Engine | NULLFUSCATOR 0.2.0 Optimized Engine | Improvement |
-| :--- | ---: | ---: | :---: |
-| **Compressed Output JAR** | 20.34 MiB (~20.0x input) | **5.42 MiB** (~5.5x input) | **-73.4%** |
-| **Obfuscation Wall Time** | 11.32 s | **8.02 s** | **-29.2%** |
-| **Obfuscator Peak RSS** | 1,335 MiB | **874 MiB** | **-34.5%** |
-| **JVM Process Launch** | 602 ms | **361 ms** | **-40.0%** |
-| **Standard Matrix Loop** | 142.8 ms | **35.0 ms** | **-75.5%** |
-
----
-
-### 4. Decompiler Resilience & Static Analysis Stress Test
+### 2. Decompiler Resilience & Static Analysis Stress Test
 
 The resulting obfuscated archives were subjected to decompilation via **CFR 0.152** and **Vineflower 1.12.0**, followed by recompilation of the emitted Java source code with `javac` (JDK 21).
 
