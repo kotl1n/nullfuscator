@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.0 — beta
+
+- Added Semantic Core encoded integer-domain protection.
+- Added preset-aware CLI improvements and release packaging updates.
+
 ## 0.1.0 — beta
 
 First public release candidate. Supports Java 17+ and offline builds.

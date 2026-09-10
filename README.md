@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/kotl1n/nullfuscator"><img src="https://img.shields.io/badge/version-0.1.0--beta-blue.svg" alt="Version"></a>
+  <a href="https://github.com/kotl1n/nullfuscator"><img src="https://img.shields.io/badge/version-0.2.0--beta-blue.svg" alt="Version"></a>
   <a href="https://github.com/kotl1n/nullfuscator"><img src="https://img.shields.io/badge/java-17%2B-orange.svg" alt="Java 17+"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
   <a href="https://github.com/kotl1n/nullfuscator"><img src="https://img.shields.io/badge/build-offline%20%2F%20reproducible-brightgreen.svg" alt="Build Status"></a>
@@ -51,7 +51,8 @@ NULLFUSCATOR applies up to 27 modular transformation passes organized into focus
   +--------------------------+
   |  1. Metadata Stripping   |  -> sourceStrip, recordMetadata
   +--------------------------+
-  |  2. Semantic Protection  |  -> semanticFabric, antiDebug, runtimeIntegrity
+  |  2. Semantic Protection  |  -> semanticCore, semanticFabric, antiDebug,
+  |                          |     runtimeIntegrity
   +--------------------------+
   |  3. Control Flow Warp    |  -> flatten, bogusJump, switchFlow,
   |                          |     returnFlow, exceptionReturn
@@ -91,6 +92,7 @@ NULLFUSCATOR applies up to 27 modular transformation passes organized into focus
 | | `numberEncryption` | Converts numeric constants into dynamic algebraic identities and runtime helpers. |
 | | `antiAI` *(Experimental)* | Links constants through keyed Feistel permutation networks to disrupt LLM heuristics. |
 | **Structural** | `referenceHiding` | Replaces direct `INVOKEVIRTUAL` / `INVOKESTATIC` calls with encrypted `invokedynamic` instructions. |
+| **Semantic** | `semanticCore` *(Experimental)* | Keeps eligible integer methods in a method-specific encoded domain from entry to return. |
 | | `fieldIndirection` | Routes direct field reads/writes through generated bridge methods. |
 | | `fieldPacking` | Compresses instance primitive fields into boxed arrays or bitmasks. |
 | | `crossClassDispersion`| Relocates internal business logic into synthetic helper classes across the archive. |
@@ -128,11 +130,11 @@ Tested on a standardized 1,233-class enterprise application corpus (1,015,769 by
 | Obfuscator & Mode | Build Time | Peak RSS | Output Size | Classes Intact | Original Strings Exposed | Verified (`-Xverify:all`) |
 | :--- | ---: | ---: | ---: | ---: | ---: | :---: |
 | **Input (Baseline)** | — | — | 0.97 MiB | 1,233 (100%) | 1,833 (100%) | **PASS** |
-| **NULLFUSCATOR 0.1.0** *(rename-only)* | **2.11 s** | **256 MiB** | **0.95 MiB** | **1** (<0.1%) | 1,833 (100%) | **PASS** |
+| **NULLFUSCATOR 0.2.0** *(rename-only)* | **2.11 s** | **256 MiB** | **0.95 MiB** | **1** (<0.1%) | 1,833 (100%) | **PASS** |
 | **[ProGuard 7.10.0](https://github.com/Guardsquare/proguard)** *(rename-only)* | 4.04 s | 323 MiB | 0.85 MiB | 1 (<0.1%) | 1,833 (100%) | **PASS** |
 | **[yGuard 5.0.0](https://github.com/yWorks/yGuard)** *(rename-only)* | 2.20 s | 187 MiB | 0.87 MiB | 1 (<0.1%) | 1,833 (100%) | **PASS** |
 | **[Skidfuscator CE 2.0.11](https://github.com/skidfuscatordev/skidfuscator-java-obfuscator)** *(default)* | 19.59 s | 1,314 MiB | 3.82 MiB | 1,233 (100%) | 581 (31.7%) | **PASS** |
-| **NULLFUSCATOR 0.1.0** *(full.hocon)* | **8.02 s** | **874 MiB** | **5.42 MiB** (~5.5x) | **0** (0%) | **1** (<0.1%) | **PASS** |
+| **NULLFUSCATOR 0.2.0** *(full.hocon)* | **8.02 s** | **874 MiB** | **5.42 MiB** (~5.5x) | **0** (0%) | **1** (<0.1%) | **PASS** |
 
 > *Note on comparison*: Skidfuscator CE default CLI runs its default control-flow without its commercial renamer, retaining class names. ProGuard used `-dontshrink -dontoptimize`. NULLFUSCATOR rename-only isolates pure symbol renaming throughput, while `full.hocon` maximizes static resistance.
 
@@ -154,11 +156,11 @@ Execution time measured using JMH micro-benchmarks executing verified hot comput
 
 ---
 
-### 3. Compact Helper Optimizations (v0.1.0 Improvement)
+### 3. Compact Helper Optimizations (v0.2.0 Improvement)
 
 With the introduction of unified helper pooling and compact invokedynamic decoders, memory footprint and output size are dramatically reduced compared to early unbounded iterations:
 
-| Metric | Legacy Unbounded Engine | NULLFUSCATOR 0.1.0 Optimized Engine | Improvement |
+| Metric | Legacy Unbounded Engine | NULLFUSCATOR 0.2.0 Optimized Engine | Improvement |
 | :--- | ---: | ---: | :---: |
 | **Compressed Output JAR** | 20.34 MiB (~20.0x input) | **5.42 MiB** (~5.5x input) | **-73.4%** |
 | **Obfuscation Wall Time** | 11.32 s | **8.02 s** | **-29.2%** |
@@ -201,15 +203,17 @@ python3 scripts/build.py
 This produces `build/nullfuscator-obf.jar`.
 
 ### 2. Run Obfuscation
+You can use the convenient `bin/nullfuscator` launcher or `java -jar build/nullfuscator-obf.jar`:
+
 ```bash
-# Basic usage with balanced profile
-java -jar build/nullfuscator-obf.jar \
-  --input myapp.jar \
-  --output myapp-obf.jar \
-  --config config/balanced.hocon \
-  --mapping myapp.map \
-  --seed 1337 \
-  --verbose
+# Minimal zero-ceremony run (auto-generates myapp-obf.jar)
+./bin/nullfuscator myapp.jar
+
+# Recommended: use built-in presets directly (-p light | balanced | strong | full)
+./bin/nullfuscator myapp.jar -p balanced
+
+# Full options with short flags, custom seed, and verbose logging
+./bin/nullfuscator -i myapp.jar -o myapp-hardened.jar -p strong -s 1337 -v
 ```
 
 ---
@@ -217,37 +221,57 @@ java -jar build/nullfuscator-obf.jar \
 ## Command-Line Reference
 
 ```text
-java -jar nullfuscator.jar [options]
-   or: java -jar nullfuscator.jar retrace --mapping <file> [--trace <file>]
-   or: java -jar nullfuscator.jar mapping-info --mapping <file>
+nullfuscator <input.jar> [output.jar] [options]
+   or: nullfuscator [options] -i <input.jar> -o <output.jar>
+   or: nullfuscator presets
+   or: nullfuscator init-config [preset] [-o config.hocon]
+   or: nullfuscator check <input.jar>
+   or: nullfuscator retrace <mapping-file> [trace-file]
+   or: nullfuscator mapping-info <mapping-file>
 ```
 
 ### Options
 
-| Flag | Argument | Description |
+| Flag | Short | Argument | Description |
+| :--- | :--- | :--- | :--- |
+| `--input` | `-i` | `<path>` | Input JAR file (or 1st positional argument). |
+| `--output` | `-o` | `<path>` | Output JAR destination (defaults to `<input>-obf.jar`). |
+| `--preset` | `-p` | `<name>` | Built-in preset (`light`, `balanced`, `strong`, `full`). No external files required! |
+| `--config` | `-c` | `<path>` | Custom HOCON profile or preset name. Can be combined with `-p` for overrides. |
+| `--lib` | `-l` | `<path>` | External dependency JAR for classpath analysis (repeatable or comma-separated). |
+| `--seed` | `-s` | `<long>` | Fixed seed for reproducible obfuscation. If omitted, uses `SecureRandom`. |
+| `--mapping` | `-m` | `<path>` | ProGuard-compatible mapping destination (defaults to `<output>.map`). |
+| `--no-mapping`| `-M` | — | Explicitly disables mapping file generation. |
+| `--report` | `-r` | `<path>` | Generates a JSON execution report (schema v1) with timings and growth metrics. |
+| `--dry-run` / `--report-only` | — | — | Executes preflight and transformations in-memory without writing output JAR. |
+| `--verbose` | `-v` | — | Enables detailed stderr diagnostics for every transformation pass. |
+| `--quiet` | `-q` | — | Suppresses non-essential informational output. |
+| `--no-color` | — | — | Disables ANSI terminal coloring. |
+| `--version` | `-V` | — | Prints NULLFUSCATOR version (`0.2.0`). |
+| `--help` | `-h` | — | Displays command-line help summary. |
+
+### Commands
+
+| Command | Usage | Description |
 | :--- | :--- | :--- |
-| `--input` | `<path>` | **Required**. Path to the input JAR file. |
-| `--output` | `<path>` | **Required**. Target destination for the obfuscated JAR. Written atomically. |
-| `--config` | `<path>` | Path to the HOCON configuration profile. (If omitted, copies without transforms). |
-| `--lib` | `<path>` | Adds an external library JAR to the hierarchy analysis. May be specified multiple times. |
-| `--seed` | `<long>` | Fixed seed for reproducible obfuscation. If omitted, uses `SecureRandom`. |
-| `--mapping` | `<path>` | Destination path for the ProGuard-compatible mapping file (defaults to `<output>.map`). |
-| `--no-mapping` | — | Explicitly disables mapping file generation. |
-| `--report` | `<path>` | Generates a JSON execution report (schema v1) with timings, growth stats, and warnings. |
-| `--report-only` | — | Executes preflight and analysis in-memory without generating output JAR or mapping. |
-| `--verbose` | — | Enables detailed stderr logging for every transformation pass. |
-| `--version` | — | Prints NULLFUSCATOR version (`0.1.0`). |
-| `--help` | — | Displays command-line help summary. |
+| `presets` | `nullfuscator presets` | Displays a comparison table of built-in profiles and performance trade-offs. |
+| `init-config` | `nullfuscator init-config [preset] [-o file]` | Scaffolds a commented `.hocon` template for custom configuration. |
+| `check` | `nullfuscator check <input.jar>` | Fast standalone preflight verification without writing output. |
+| `retrace` | `nullfuscator retrace <mapping> [trace]` | Demangles obfuscated stack traces (supports positional args, `-m`, `-t`, or stdin). |
+| `mapping-info` | `nullfuscator mapping-info <mapping>` | Displays mapping metadata, seed, format, and input SHA-256 digest. |
 
 ### Stack Trace Retracing
 Demangle obfuscated production crash traces back to original class, method, and line numbers:
 
 ```bash
-# Retrace from a crash dump file
-java -jar build/nullfuscator-obf.jar retrace --mapping myapp.map --trace crash.log
+# Retrace using positional arguments
+./bin/nullfuscator retrace myapp.map crash.log
+
+# Retrace using flags
+./bin/nullfuscator retrace -m myapp.map -t crash.log
 
 # Retrace directly from stdin pipe
-cat crash.log | java -jar build/nullfuscator-obf.jar retrace --mapping myapp.map
+cat crash.log | ./bin/nullfuscator retrace myapp.map
 ```
 
 ---
@@ -259,7 +283,7 @@ Integrate NULLFUSCATOR directly into your Gradle build pipeline:
 ```groovy
 task obfuscate(type: JavaExec) {
     dependsOn jar
-    classpath = files('tools/nullfuscator-0.1.0.jar')
+    classpath = files('tools/nullfuscator-0.2.0.jar')
     mainClass = 'com.nullfuscator.obf.core.Main'
 
     args = [

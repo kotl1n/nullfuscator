@@ -82,6 +82,7 @@ public final class RunReport {
     public Set<String> changedMethods() { return Set.copyOf(changedMethods); }
     public void outputJarBytes(long value) { outputJarBytes = value; }
     public void warn(String warning) { warnings.add(warning); }
+    public List<String> warnings() { return List.copyOf(warnings); }
 
     public void pass(String id, long millis, Snapshot before, Snapshot after) {
         Set<String> keys = new HashSet<>(before.methods.keySet());

@@ -56,6 +56,7 @@ public final class SemanticFabricTransformer implements Transformer {
         for (ClassNode owner : original) {
             for (MethodNode method : owner.methods) {
                 if (ctx.isHotPath(owner, method)) continue;
+                if (ctx.isSemanticCoreMethod(method)) continue;
                 int arithmetic = eligibleArithmeticCount(method);
                 if (arithmetic < minOps || rnd.nextInt(100) >= percent) continue;
 

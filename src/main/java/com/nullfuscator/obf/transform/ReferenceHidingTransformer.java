@@ -78,8 +78,7 @@ public final class ReferenceHidingTransformer implements Transformer {
             if (Limits.hugeClass(cn)) continue;
             if ((cn.access & (Opcodes.ACC_INTERFACE | Opcodes.ACC_ANNOTATION | Opcodes.ACC_MODULE)) != 0) continue;
 
-            // Repeated calls to the same target share bounded encrypted CP entries.
-            // The cache is per caller: lookup privileges and caller-bound keys stay intact.
+
             Map<CallTarget, List<InvokeDynamicInsnNode>> sites = new HashMap<>();
             int classHidden = 0;
             Handle bsm = null;
@@ -185,7 +184,6 @@ public final class ReferenceHidingTransformer implements Transformer {
     }
 
     private static boolean fitsConstantPoolUtf8(String value) {
-        // Compact ciphertext contains only U+0000..U+00FF (one or two MUTF-8 bytes).
         if (value.length() <= 65535 / 2) return true;
         int bytes = 0;
         for (int i = 0; i < value.length(); i++) {

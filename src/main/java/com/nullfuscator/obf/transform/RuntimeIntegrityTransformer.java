@@ -8,7 +8,7 @@ import org.objectweb.asm.tree.*;
 import java.io.InputStream;
 import java.util.*;
 
-/** Must be last: verifier bodies and their expected hashes cannot be transformed afterwards. */
+
 public final class RuntimeIntegrityTransformer implements Transformer, Opcodes {
     private static final String TEMPLATE = "com/nullfuscator/obf/runtime/IntegrityGuard";
     @Override public String id() { return "runtimeIntegrity"; }

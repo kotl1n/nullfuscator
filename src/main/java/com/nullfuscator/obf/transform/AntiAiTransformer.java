@@ -86,11 +86,6 @@ public final class AntiAiTransformer implements Transformer {
         ctx.log().debug("antiAI: liveHelpers=" + added + " encodedConsts=" + encoded);
     }
 
-    /** Each stage is a two-round 16+16 Feistel permutation, followed by
-     * its predecessor. All arithmetic deliberately uses Java int overflow.
-     * This raises static analysis cost; it is not a cryptographic boundary:
-     * an analyst who executes the helpers can still recover constants.
-     */
     private static final class Network {
         final ClassNode owner;
         final ObfContext ctx;
@@ -113,7 +108,7 @@ public final class AntiAiTransformer implements Transformer {
         }
 
         void decode(InsnList il, int value) {
-            // The first use reaches every stage; subsequent uses vary routes.
+
             int stage = used ? ctx.random().nextInt(names.length) : names.length - 1;
             used = true;
             int encoded = value;

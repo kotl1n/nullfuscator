@@ -34,6 +34,62 @@ public final class ObfConfig {
         return new ObfConfig(config, sources);
     }
 
+    public static ObfConfig loadWithPresetFallback(File configFile, String presetName) {
+        ObfConfig custom = load(configFile);
+        ObfConfig preset = loadPreset(presetName);
+        return new ObfConfig(custom.root.withFallback(preset.root), custom.sourceFiles);
+    }
+
+    public static ObfConfig loadPreset(String name) {
+        String content = readPresetContent(name);
+        Config config = ConfigFactory.parseString(content,
+                ConfigParseOptions.defaults().setOriginDescription("preset:" + normalizePresetName(name))).resolve();
+        return new ObfConfig(config, Set.of());
+    }
+
+    public static String normalizePresetName(String name) {
+        if (name == null) return null;
+        String clean = name.trim().toLowerCase();
+        if (clean.endsWith(".hocon")) clean = clean.substring(0, clean.length() - 6);
+        return clean;
+    }
+
+    public static boolean isKnownPreset(String name) {
+        String clean = normalizePresetName(name);
+        return "light".equals(clean) || "balanced".equals(clean) || "strong".equals(clean) || "full".equals(clean);
+    }
+
+    public static String readPresetContent(String name) {
+        String clean = normalizePresetName(name);
+        if (!isKnownPreset(clean)) {
+            throw new IllegalArgumentException("unknown preset: '" + name + "'. Available presets: light, balanced, strong, full");
+        }
+        String resourcePath = "/presets/" + clean + ".hocon";
+        try (java.io.InputStream in = ObfConfig.class.getResourceAsStream(resourcePath)) {
+            if (in != null) {
+                return new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+            }
+        } catch (java.io.IOException e) {
+            throw new RuntimeException("failed to read preset " + clean, e);
+        }
+        File local = new File("config/" + clean + ".hocon");
+        if (local.isFile()) {
+            try {
+                return java.nio.file.Files.readString(local.toPath(), java.nio.charset.StandardCharsets.UTF_8);
+            } catch (java.io.IOException ignored) {}
+        }
+        throw new IllegalArgumentException("preset resource not found: " + resourcePath);
+    }
+
+    public record PresetInfo(String name, String protectionLevel, String sizeImpact, String runtimeOverhead, String description) {}
+
+    public static final List<PresetInfo> PRESET_INFOS = List.of(
+            new PresetInfo("light", "Basic", "+5% .. +15%", "<1%", "High-performance services, tick loops, games, Fabric mods"),
+            new PresetInfo("balanced", "High", "+20% .. +50%", "1% .. 5%", "Production commercial software, enterprise APIs (Recommended)"),
+            new PresetInfo("strong", "Very High", "+50% .. +120%", "5% .. 15%", "Sensitive licensing modules, proprietary algorithms"),
+            new PresetInfo("full", "Maximum", "~5.5x", "High", "Maximum paranoia, crack-mes, core cryptographic routines")
+    );
+
     private static Config loadConfig(File file, Set<File> loading, Set<File> sources) {
         if (!loading.add(file)) throw new IllegalArgumentException("configuration inheritance cycle at " + file);
         sources.add(file);
@@ -44,8 +100,22 @@ public final class ObfConfig {
             if (filename != null) sources.add(new File(filename));
         }
         if (own.hasPath("baseConfig")) {
-            File base = new File(file.getParentFile(), own.getString("baseConfig")).getAbsoluteFile();
-            own = own.withFallback(loadConfig(base, loading, sources));
+            String baseRef = own.getString("baseConfig");
+            Config baseConfig;
+            if (baseRef.startsWith("preset:")) {
+                String presetName = baseRef.substring(7).trim();
+                String content = readPresetContent(presetName);
+                baseConfig = ConfigFactory.parseString(content).resolve();
+            } else {
+                File base = new File(file.getParentFile(), baseRef).getAbsoluteFile();
+                if (!base.exists() && isKnownPreset(baseRef)) {
+                    String content = readPresetContent(baseRef);
+                    baseConfig = ConfigFactory.parseString(content).resolve();
+                } else {
+                    baseConfig = loadConfig(base, loading, sources);
+                }
+            }
+            own = own.withFallback(baseConfig);
         }
         loading.remove(file);
         return own;

@@ -12,8 +12,8 @@ ROOT = Path(__file__).resolve().parents[1]
 JAR = ROOT / 'build/nullfuscator-obf.jar'
 
 
-def run(*args):
-    return subprocess.run(['java', '-jar', str(JAR), *map(str, args)], capture_output=True, text=True)
+def run(*args, stdin=''):
+    return subprocess.run(['java', '-jar', str(JAR), *map(str, args)], capture_output=True, text=True, input=stdin)
 
 
 with tempfile.TemporaryDirectory(prefix='nullfuscator-cli-') as temp:
@@ -80,9 +80,51 @@ with tempfile.TemporaryDirectory(prefix='nullfuscator-cli-') as temp:
         result = run(*args)
         assert result.returncode == 2 and 'Exception' not in result.stderr, result.stderr
     assert run('--help').returncode == 0 and '--lib' in run('--help').stdout
-    assert run('--version').returncode == 0 and '0.1.0' in run('--version').stdout
+    assert run('--version').returncode == 0 and '0.2.0' in run('--version').stdout
+    short_out = work / 'short_out.jar'
+    result = run('-i', original, '-o', short_out, '-p', 'balanced', '-s', '42', '-v')
+    assert result.returncode == 0 and short_out.is_file(), result.stderr
+    assert subprocess.check_output(['java', '-Xverify:all', '-jar', str(short_out)]) == b'43\n'
+
+    eq_out = work / 'eq_out.jar'
+    result = run(f'--input={original}', f'--output={eq_out}', '-p=light', '-s=99')
+    assert result.returncode == 0 and eq_out.is_file(), result.stderr
+
+    pos_out = work / 'pos_out.jar'
+    result = run(original, pos_out, '-p', 'balanced')
+    assert result.returncode == 0 and pos_out.is_file(), result.stderr
+
+    default_target = work / 'mytest.jar'
+    default_target.write_bytes(original.read_bytes())
+    expected_default_out = work / 'mytest-obf.jar'
+    result = run(default_target, '-p', 'light')
+    assert result.returncode == 0 and expected_default_out.is_file(), result.stderr
+
+    assert run('presets').returncode == 0 and 'balanced' in run('presets').stdout
+    init_file = work / 'exported-config.hocon'
+    assert run('init-config', 'balanced', '-o', init_file).returncode == 0 and init_file.is_file()
+    assert 'stringEncryption' in init_file.read_text()
+    assert run('check', original).returncode == 0 and 'Preflight check PASSED' in run('check', original).stdout
+
+    map_test = Path(str(short_out) + '.map')
+    assert run('mapping-info', map_test).returncode == 0 and 'format=2' in run('mapping-info', map_test).stdout
+    crash_file = work / 'crash.txt'
+    crash_file.write_text('at a.b(Unknown Source)\n')
+    assert run('retrace', map_test, crash_file).returncode == 0
+    assert run('retrace', map_test, stdin='at a.b(Unknown Source)\n').returncode == 0
+
+    typo_result = run('--confg')
+    assert typo_result.returncode == 2 and 'did you mean --config' in typo_result.stderr
+
+    launcher = ROOT / 'bin/nullfuscator'
+    launcher_res = subprocess.run([str(launcher), '--version'], capture_output=True, text=True)
+    assert launcher_res.returncode == 0 and 'NULLFUSCATOR' in launcher_res.stdout
+
     with zipfile.ZipFile(JAR) as archive:
         for name in ('LICENSE', 'THIRD_PARTY_NOTICES.md', 'licenses/ASM-BSD-3-Clause.txt',
                      'licenses/Typesafe-Config-Apache-2.0.txt'):
             assert archive.read('META-INF/' + name) == (ROOT / name).read_bytes()
-print('PASS CLI: path collisions, aliases, in-place identity, JSON stdout, arguments, licenses')
+        for preset in ('light.hocon', 'balanced.hocon', 'strong.hocon', 'full.hocon'):
+            assert f'presets/{preset}' in archive.namelist()
+
+print('PASS CLI: path collisions, aliases, in-place identity, JSON stdout, arguments, licenses, ergonomic CLI, presets, launcher')

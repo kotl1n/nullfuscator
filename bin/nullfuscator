@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+set -e
+
+SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SOURCE" ]; do
+  DIR="$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+BIN_DIR="$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )"
+ROOT_DIR="$( cd -P "$BIN_DIR/.." >/dev/null 2>&1 && pwd )"
+
+JAR=""
+for candidate in \
+  "$BIN_DIR/nullfuscator-obf.jar" \
+  "$ROOT_DIR/build/nullfuscator-obf.jar" \
+  "$ROOT_DIR/nullfuscator-obf.jar" \
+  "$BIN_DIR"/nullfuscator-*.jar \
+  "$ROOT_DIR"/build/release/nullfuscator-*.jar; do
+  if [ -f "$candidate" ]; then
+    JAR="$candidate"
+    break
+  fi
+done
+
+if [ -z "$JAR" ]; then
+  echo "error: could not find nullfuscator-obf.jar. Run 'python3 scripts/build.py' first." >&2
+  exit 1
+fi
+
+if ! command -v java >/dev/null 2>&1; then
+  echo "error: 'java' executable not found in PATH. Java 17+ is required." >&2
+  exit 1
+fi
+
+exec java -jar "$JAR" "$@"

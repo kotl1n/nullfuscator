@@ -31,9 +31,6 @@ public final class NameGenerator {
 
     public synchronized String nextRandom(Random random, int maxDepth) {
         int depth = Math.max(1, Math.min(32, maxDepth));
-        // Short opaque names become saturated in large archives.  Keeping the
-        // retry budget bounded prevents a quadratic slowdown while next()
-        // still supplies a collision-free opaque fallback.
         for (int attempt = 0; attempt < RANDOM_ATTEMPT_LIMIT; attempt++) {
             int width = 1 + random.nextInt(depth);
             StringBuilder sb = new StringBuilder();

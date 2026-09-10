@@ -2,6 +2,7 @@
 # explicit application selectors and are intentionally configured per target.
 
 sourceStrip     { enabled: true, stripLineNumbers: true, stripLocalVars: true, stripSignatures: true }
+semanticCore    { enabled: true, percent: 45, minOperations: 3, maxMethods: 64, exempt: [ "class{^dev/murk/mixin/}" ] }
 semanticFabric  { enabled: true, percent: 100, minArithmeticOps: 3, maxMethods: 96, carriers: 12, exempt: [ "class{^dev\/murk\/mixin\/}" ] }
 
 stringEncryption { enabled: true, type: POLYMORPHIC, exempt: [ "class{^dev\/murk\/mixin\/}" ] }

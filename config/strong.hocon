@@ -2,6 +2,7 @@
 baseConfig = "full.hocon"
 
 semanticFabric { percent: 30, maxMethods: 48, carriers: 6 }
+semanticCore { percent: 30, maxMethods: 32 }
 numberEncryption { layers: 3 }
 flowSwitch { enabled: false }
 integerReturn { enabled: false }

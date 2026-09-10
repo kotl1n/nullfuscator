@@ -34,6 +34,7 @@ public final class ObfContext {
     private final Map<MethodNode, String> originalMethods = new IdentityHashMap<>();
     private final Set<AbstractInsnNode> encodedNumbers = java.util.Collections.newSetFromMap(new IdentityHashMap<>());
     private final Set<MethodNode> inputMethods = java.util.Collections.newSetFromMap(new IdentityHashMap<>());
+    private final Set<MethodNode> semanticCoreMethods = java.util.Collections.newSetFromMap(new IdentityHashMap<>());
     private ExemptMatcher hotPaths;
     private IntegrityPlan integrityPlan;
     private RunReport report;
@@ -144,6 +145,9 @@ public final class ObfContext {
     public void transferInputMethod(MethodNode source, MethodNode target) {
         if (inputMethods.contains(source)) inputMethods.add(target);
     }
+
+    public void markSemanticCoreMethod(MethodNode method) { semanticCoreMethods.add(method); }
+    public boolean isSemanticCoreMethod(MethodNode method) { return semanticCoreMethods.contains(method); }
 
     public void initializePolicies() {
         if (hotPaths != null) return;

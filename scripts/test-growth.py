@@ -15,7 +15,8 @@ with tempfile.TemporaryDirectory(prefix="growth-regression-") as temp:
     subprocess.run(["javac", "--release", "17", "-cp", str(jar), "-d", temp,
                     str(ROOT / "src/test/java/com/nullfuscator/obf/GrowthRegression.java"),
                     str(ROOT / "src/test/java/com/nullfuscator/obf/CompactGrowthRegression.java"),
-                    str(ROOT / "src/test/java/com/nullfuscator/obf/AntiAiRegression.java")], check=True)
+                    str(ROOT / "src/test/java/com/nullfuscator/obf/AntiAiRegression.java"),
+                    str(ROOT / "src/test/java/com/nullfuscator/obf/SemanticCoreRegression.java")], check=True)
     subprocess.run(["java", "-Xverify:all", "-Xmx256m", "-cp", os.pathsep.join([temp, str(jar)]),
                     "com.nullfuscator.obf.GrowthRegression"], check=True)
 
@@ -24,6 +25,9 @@ with tempfile.TemporaryDirectory(prefix="growth-regression-") as temp:
 
     subprocess.run(["java", "-Xverify:all", "-Xmx256m", "-cp", os.pathsep.join([temp, str(jar)]),
                     "com.nullfuscator.obf.AntiAiRegression"], check=True)
+
+    subprocess.run(["java", "-Xverify:all", "-Xmx256m", "-cp", os.pathsep.join([temp, str(jar)]),
+                    "com.nullfuscator.obf.SemanticCoreRegression"], check=True)
 
     work = Path(temp)
     source = work / "Smoke.java"
@@ -320,4 +324,3 @@ record Circle(int radius) implements Shape {}
     assert rejected.returncode != 0 and "JAR bytes" in (rejected.stdout + rejected.stderr)
     assert not budget_output.exists()
     print("PASS coverage and exact JAR budgets reject before output install")
-
