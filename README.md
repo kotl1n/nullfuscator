@@ -119,6 +119,20 @@ NULLFUSCATOR ships with four preconfigured HOCON profiles in `config/`:
 | **`strong.hocon`** | Sensitive licensing modules, proprietary algorithms | Substantial (+50% – +120%) | Medium (5% – 15%) | Very High (+ InvokeDynamic + Exceptions + Anti-Deobf) |
 | **`full.hocon`** | Maximum paranoia, core cryptographic routines, crack-me challenges | Heavy (up to ~5.5x) | High (avoid on hot loops) | Maximum (All 27 passes enabled simultaneously) |
 
+Shared exclusions and naming options can be declared once and inherited by every relevant section:
+
+```hocon
+defaults {
+  exempt = [ "class{^dev/murk/mixin/}" ]
+  naming {
+    chars = [ "I", "l1", "lI", "1l" ]
+    depth = 8
+  }
+}
+```
+
+`defaults.exempt` applies to every transformation. A section-level `exempt` list adds rules without replacing the shared list. `defaults.naming` applies to `classRenamer`, `methodRenamer`, `fieldRenamer`, and `recordMetadata`; values declared in a section override the shared values.
+
 ---
 
 ## Reproducible Profile Benchmark

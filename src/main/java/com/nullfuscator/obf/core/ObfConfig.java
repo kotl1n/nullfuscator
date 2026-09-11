@@ -6,7 +6,9 @@ import com.typesafe.config.ConfigParseOptions;
 import com.typesafe.config.ConfigValueFactory;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.HashSet;
@@ -14,6 +16,9 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 public final class ObfConfig {
+
+    private static final Set<String> NAMING_SECTIONS = Set.of(
+            "classRenamer", "methodRenamer", "fieldRenamer", "recordMetadata");
 
     private final Config root;
     private final Set<File> sourceFiles;
@@ -146,24 +151,39 @@ public final class ObfConfig {
     }
 
     public Section section(String id) {
-        return sections.computeIfAbsent(id, key -> new Section(
-                root.hasPath(key) ? root.getConfig(key) : ConfigFactory.empty()));
+        return sections.computeIfAbsent(id, key -> {
+            boolean present = root.hasPath(key);
+            Config section = present ? root.getConfig(key) : ConfigFactory.empty();
+            if (present && NAMING_SECTIONS.contains(key) && root.hasPath("defaults.naming")) {
+                section = section.withFallback(root.getConfig("defaults.naming"));
+            }
+            List<String> globalExempt = root.hasPath("defaults.exempt")
+                    ? safeStringList(root, "defaults.exempt") : Collections.emptyList();
+            return new Section(section, present, globalExempt);
+        });
+    }
+
+    private static List<String> safeStringList(Config config, String path) {
+        try { return config.getStringList(path); }
+        catch (RuntimeException e) { return Collections.emptyList(); }
     }
 
     public static final class Section {
         private final Config c;
+        private final boolean present;
         private final ExemptMatcher exempt;
 
-        Section(Config c) {
+        Section(Config c, boolean present, List<String> globalExempt) {
             this.c = c;
-            List<String> ex = c.hasPath("exempt")
-                    ? safeStringList(c, "exempt") : Collections.emptyList();
-            this.exempt = new ExemptMatcher(ex);
+            this.present = present;
+            LinkedHashSet<String> exemptions = new LinkedHashSet<>(globalExempt);
+            if (c.hasPath("exempt")) exemptions.addAll(safeStringList(c, "exempt"));
+            this.exempt = new ExemptMatcher(new ArrayList<>(exemptions));
         }
 
         public boolean enabled() { return getBoolean("enabled", false); }
 
-        public boolean present() { return !c.isEmpty(); }
+        public boolean present() { return present; }
 
         public int getInt(String path, int def) {
             return c.hasPath(path) ? c.getInt(path) : def;
@@ -190,8 +210,7 @@ public final class ObfConfig {
         public Config raw() { return c; }
 
         private static List<String> safeStringList(Config c, String path) {
-            try { return c.getStringList(path); }
-            catch (RuntimeException e) { return Collections.emptyList(); }
+            return ObfConfig.safeStringList(c, path);
         }
     }
 }

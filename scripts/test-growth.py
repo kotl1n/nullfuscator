@@ -16,7 +16,8 @@ with tempfile.TemporaryDirectory(prefix="growth-regression-") as temp:
                     str(ROOT / "src/test/java/com/nullfuscator/obf/GrowthRegression.java"),
                     str(ROOT / "src/test/java/com/nullfuscator/obf/CompactGrowthRegression.java"),
                     str(ROOT / "src/test/java/com/nullfuscator/obf/AntiAiRegression.java"),
-                    str(ROOT / "src/test/java/com/nullfuscator/obf/SemanticCoreRegression.java")], check=True)
+                    str(ROOT / "src/test/java/com/nullfuscator/obf/SemanticCoreRegression.java"),
+                    str(ROOT / "src/test/java/com/nullfuscator/obf/ConfigRegression.java")], check=True)
     subprocess.run(["java", "-Xverify:all", "-Xmx256m", "-cp", os.pathsep.join([temp, str(jar)]),
                     "com.nullfuscator.obf.GrowthRegression"], check=True)
 
@@ -28,6 +29,9 @@ with tempfile.TemporaryDirectory(prefix="growth-regression-") as temp:
 
     subprocess.run(["java", "-Xverify:all", "-Xmx256m", "-cp", os.pathsep.join([temp, str(jar)]),
                     "com.nullfuscator.obf.SemanticCoreRegression"], check=True)
+
+    subprocess.run(["java", "-Xverify:all", "-Xmx256m", "-cp", os.pathsep.join([temp, str(jar)]),
+                    "com.nullfuscator.obf.ConfigRegression"], check=True)
 
     work = Path(temp)
     source = work / "Smoke.java"

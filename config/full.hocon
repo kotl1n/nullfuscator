@@ -1,38 +1,46 @@
 # High-strength configuration. Runtime integrity and Gson schema pinning require
 # explicit application selectors and are intentionally configured per target.
 
-sourceStrip     { enabled: true, stripLineNumbers: true, stripLocalVars: true, stripSignatures: true }
-semanticCore    { enabled: true, percent: 45, minOperations: 3, maxMethods: 64, exempt: [ "class{^dev/murk/mixin/}" ] }
-semanticFabric  { enabled: true, percent: 100, minArithmeticOps: 3, maxMethods: 96, carriers: 12, exempt: [ "class{^dev\/murk\/mixin\/}" ] }
+defaults {
+  exempt = [ "class{^dev/murk/mixin/}" ]
+  naming {
+    chars: [ "I", "l1", "lI", "1l" ]
+    depth: 8
+  }
+}
 
-stringEncryption { enabled: true, type: POLYMORPHIC, exempt: [ "class{^dev\/murk\/mixin\/}" ] }
-numberEncryption { enabled: true, layers: 5,      exempt: [ "class{^dev\/murk\/mixin\/}" ] }
+sourceStrip { enabled: true, stripLineNumbers: true, stripLocalVars: true, stripSignatures: true }
+semanticCore { enabled: true, percent: 45, minOperations: 3, maxMethods: 64 }
+semanticFabric { enabled: true, percent: 100, minArithmeticOps: 3, maxMethods: 96, carriers: 12 }
 
-safeControlFlow  { enabled: false, level: 3, exempt: [ "class{^dev\/murk\/mixin\/}" ] }
-mangledJump      { enabled: false,          exempt: [ "class{^dev\/murk\/mixin\/}" ] }
-flowSwitch       { enabled: true,           exempt: [ "class{^dev\/murk\/mixin\/}" ] }
-integerReturn    { enabled: true,           exempt: [ "class{^dev\/murk\/mixin\/}" ] }
-exceptionReturn  { enabled: true, percent: 100, exempt: [ "class{^dev\/murk\/mixin\/}" ] }
+stringEncryption { enabled: true, type: POLYMORPHIC }
+numberEncryption { enabled: true, layers: 5 }
 
-antiAI           { enabled: true, level: 3, decoyMethods: 8, constantEncodingPercent: 85, exempt: [ "class{^dev\/murk\/mixin\/}" ] }
-antiDecompiler   { enabled: true, level: 3, exempt: [ "class{^dev\/murk\/mixin\/}" ] }
-antiDeobf        { enabled: true, level: 3, badSignatures: false, badRealClassSignatures: false, exempt: [ "class{^dev\/murk\/mixin\/}" ] }
-fileCrasher      { enabled: true,          exempt: [ "class{^dev\/murk\/mixin\/}" ] }
+safeControlFlow { enabled: false, level: 3 }
+mangledJump { enabled: false }
+flowSwitch { enabled: true }
+integerReturn { enabled: true }
+exceptionReturn { enabled: true, percent: 100 }
 
-classRenamer  { enabled: true, renameMain: true, type: CUSTOM, prefix: "a/", chars: [ "I", "l1", "lI", "1l" ], depth: 8, exempt: [ "class{^dev\/murk\/mixin\/}" ] }
-methodRenamer { enabled: true, type: CUSTOM,                 chars: [ "I", "l1", "lI", "1l" ], depth: 8, renameVirtual: true, renamePublic: true, exempt: [ "class{^dev\/murk\/mixin\/}" ] }
-fieldRenamer  { enabled: true, type: CUSTOM, chars: [ "I", "l1", "lI", "1l" ], depth: 8,             exempt: [ "class{^dev\/murk\/mixin\/}" ] }
+antiAI { enabled: true, level: 3, decoyMethods: 8, constantEncodingPercent: 85 }
+antiDecompiler { enabled: true, level: 3 }
+antiDeobf { enabled: true, level: 3, badSignatures: false, badRealClassSignatures: false }
+fileCrasher { enabled: true }
 
-crossClassDispersion { enabled: true, dispersalPercent: 75, sinks: 24, variantsPerOpcode: 2, maxHelpers: 2048, maxOperations: 8192, exempt: [ "class{^dev\/murk\/mixin\/}" ] }
-recordMetadata { enabled: true, depth: 8, eraseIdentity: true, chars: [ "I", "l1", "lI", "1l" ], exempt: [ "class{^dev\/murk\/mixin\/}" ] }
-methodRelocation { enabled: true, percent: 85, maxMethods: 128, carriers: 16, minInstructions: 20, exempt: [ "class{^dev\/murk\/mixin\/}" ] }
-methodExtraction { enabled: true, percent: 100, maxMethods: 160, carriers: 16, minInstructions: 8, exempt: [ "class{^dev\/murk\/mixin\/}" ] }
-fieldPacking { enabled: true, minFields: 1, exempt: [ "class{^dev\/murk\/mixin\/}" ] }
+classRenamer { enabled: true, renameMain: true, prefix: "a/" }
+methodRenamer { enabled: true, renameVirtual: true, renamePublic: true }
+fieldRenamer { enabled: true }
 
-referenceHiding { enabled: true, hidePercent: 100, exempt: [ "class{^dev\/murk\/mixin\/}" ] }
+crossClassDispersion { enabled: true, dispersalPercent: 75, sinks: 24, variantsPerOpcode: 2, maxHelpers: 2048, maxOperations: 8192 }
+recordMetadata { enabled: true, eraseIdentity: true }
+methodRelocation { enabled: true, percent: 85, maxMethods: 128, carriers: 16, minInstructions: 20 }
+methodExtraction { enabled: true, percent: 100, maxMethods: 160, carriers: 16, minInstructions: 8 }
+fieldPacking { enabled: true, minFields: 1 }
 
-antiDebug { enabled: true, checkPercent: 50, detectors: 6, exempt: [ "class{^dev\/murk\/mixin\/}" ] }
+referenceHiding { enabled: true, hidePercent: 100 }
 
-flatten { enabled: true, percent: 100, allowReferenceLocals: false, exempt: [ "class{^dev\/murk\/mixin\/}" ] }
+antiDebug { enabled: true, checkPercent: 50, detectors: 6 }
 
-fieldIndirection { enabled: true, percent: 100, exempt: [ "class{^dev\/murk\/mixin\/}" ] }
+flatten { enabled: true, percent: 100, allowReferenceLocals: false }
+
+fieldIndirection { enabled: true, percent: 100 }
