@@ -80,7 +80,7 @@ with tempfile.TemporaryDirectory(prefix='nullfuscator-cli-') as temp:
         result = run(*args)
         assert result.returncode == 2 and 'Exception' not in result.stderr, result.stderr
     assert run('--help').returncode == 0 and '--lib' in run('--help').stdout
-    assert run('--version').returncode == 0 and '0.2.0' in run('--version').stdout
+    assert run('--version').returncode == 0 and '0.2.1' in run('--version').stdout
     short_out = work / 'short_out.jar'
     result = run('-i', original, '-o', short_out, '-p', 'balanced', '-s', '42', '-v')
     assert result.returncode == 0 and short_out.is_file(), result.stderr

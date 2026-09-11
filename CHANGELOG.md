@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.1 — beta
+
+- Added shared configuration defaults for exclusions and naming options.
+- Global `defaults.exempt` rules now apply to every transformation, while per-section rules extend them.
+- Added regression coverage for configuration defaults, overrides and legacy compatibility.
+- Simplified the full protection profile by removing duplicated exclusion and naming settings.
+
 ## 0.2.0 — beta
 
 - Added Semantic Core encoded integer-domain protection.

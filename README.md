@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/kotl1n/nullfuscator"><img src="https://img.shields.io/badge/version-0.2.0--beta-blue.svg" alt="Version"></a>
+  <a href="https://github.com/kotl1n/nullfuscator"><img src="https://img.shields.io/badge/version-0.2.1--beta-blue.svg" alt="Version"></a>
   <a href="https://github.com/kotl1n/nullfuscator"><img src="https://img.shields.io/badge/java-17%2B-orange.svg" alt="Java 17+"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
   <a href="https://github.com/kotl1n/nullfuscator"><img src="https://img.shields.io/badge/build-offline%20%2F%20reproducible-brightgreen.svg" alt="Build Status"></a>
@@ -230,7 +230,7 @@ nullfuscator <input.jar> [output.jar] [options]
 | `--verbose` | `-v` | — | Enables detailed stderr diagnostics for every transformation pass. |
 | `--quiet` | `-q` | — | Suppresses non-essential informational output. |
 | `--no-color` | — | — | Disables ANSI terminal coloring. |
-| `--version` | `-V` | — | Prints NULLFUSCATOR version (`0.2.0`). |
+| `--version` | `-V` | — | Prints NULLFUSCATOR version (`0.2.1`). |
 | `--help` | `-h` | — | Displays command-line help summary. |
 
 ### Commands
@@ -266,7 +266,7 @@ Integrate NULLFUSCATOR directly into your Gradle build pipeline:
 ```groovy
 task obfuscate(type: JavaExec) {
     dependsOn jar
-    classpath = files('tools/nullfuscator-0.2.0.jar')
+    classpath = files('tools/nullfuscator-0.2.1.jar')
     mainClass = 'com.nullfuscator.obf.core.Main'
 
     args = [
