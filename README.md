@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/kotl1n/nullfuscator"><img src="https://img.shields.io/badge/version-0.2.2--beta-blue.svg" alt="Version"></a>
+  <a href="https://github.com/kotl1n/nullfuscator"><img src="https://img.shields.io/badge/version-0.2.3--beta-blue.svg" alt="Version"></a>
   <a href="https://github.com/kotl1n/nullfuscator"><img src="https://img.shields.io/badge/java-17%2B-orange.svg" alt="Java 17+"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
   <a href="https://github.com/kotl1n/nullfuscator"><img src="https://img.shields.io/badge/build-offline%20%2F%20reproducible-brightgreen.svg" alt="Build Status"></a>
@@ -20,6 +20,10 @@
 ## Overview
 
 **NULLFUSCATOR** is a standalone, deterministic Java bytecode obfuscator built on the OW2 ASM engine. Designed for modern JVM workloads (supporting Java 17 through Java 21+), NULLFUSCATOR significantly raises the cost of static reverse engineering, automated decompilation, runtime debugging, and code tampering.
+
+### 0.2.3-beta
+
+This pre-release consolidates the core and transformer code after the 0.2.2 performance hardening work. It keeps the existing CLI, profile format, mapping v2 format, and transformation set intact. The release was rechecked with verifier and differential tests across the shipped profiles, Java 17/21 class files, mappings, enum and record metadata, Fabric/Mixin and ServiceLoader fixtures.
 
 Unlike conventional obfuscators that merely rename symbols or recklessly bloat bytecode to the point of runtime instability, NULLFUSCATOR provides:
 - **Strict budget gates and bounded growth**: Enforces hard caps on instruction expansion, method size limits, and archive growth to eliminate `MethodTooLargeException` and avoid runaway memory leaks.
@@ -241,7 +245,7 @@ nullfuscator <input.jar> [output.jar] [options]
 | `--verbose` | `-v` | — | Enables detailed stderr diagnostics for every transformation pass. |
 | `--quiet` | `-q` | — | Suppresses non-essential informational output. |
 | `--no-color` | — | — | Disables ANSI terminal coloring. |
-| `--version` | `-V` | — | Prints NULLFUSCATOR version (`0.2.2-beta`). |
+| `--version` | `-V` | — | Prints NULLFUSCATOR version (`0.2.3-beta`). |
 | `--help` | `-h` | — | Displays command-line help summary. |
 
 ### Commands
@@ -286,7 +290,7 @@ Integrate NULLFUSCATOR directly into your Gradle build pipeline:
 ```groovy
 task obfuscate(type: JavaExec) {
     dependsOn jar
-    classpath = files('tools/nullfuscator-0.2.2-beta.jar')
+    classpath = files('tools/nullfuscator-0.2.3-beta.jar')
     mainClass = 'com.nullfuscator.obf.core.Main'
 
     args = [

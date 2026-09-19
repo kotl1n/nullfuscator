@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.3-beta
+
+- Refactored the core and transformer implementations for a consistent code style and simpler maintenance.
+- Simplified several internal local-variable and initialization paths without changing the public CLI, configuration format, mapping format, or bundled profiles.
+- Revalidated the supported transformation matrix: verifier and differential tests, Java 17/21 class files, enum and record handling, Fabric/Mixin and ServiceLoader fixtures, mappings, CLI safety checks, and reproducible packaging.
+
 ## 0.2.2-beta
 
 - Reduced archive growth and runtime overhead in strong and full profiles by avoiding repeated protection of generated helpers.
