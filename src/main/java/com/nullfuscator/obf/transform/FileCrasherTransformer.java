@@ -17,26 +17,38 @@ public final class FileCrasherTransformer implements Transformer {
     private static final int MIN_LEN = 48;
     private static final int MAX_LEN = 256;
 
-    @Override public String id() { return "fileCrasher"; }
+    @Override
+    public String id() {
+        return "fileCrasher";
+    }
 
-    @Override public String description() { return "attach ignorable junk class attribute"; }
+    @Override
+    public String description() {
+        return "attach ignorable junk class attribute";
+    }
 
     @Override
     public void transform(ObfContext ctx) {
         Random rnd = ctx.random();
         int count = 0;
+
         for (ClassNode cn : ctx.targets(id())) {
             int len = MIN_LEN + rnd.nextInt(MAX_LEN - MIN_LEN + 1);
             byte[] junk = new byte[len];
             rnd.nextBytes(junk);
-            if (cn.attrs == null) cn.attrs = new ArrayList<>();
+
+            if (cn.attrs == null) {
+                cn.attrs = new ArrayList<>();
+            }
             cn.attrs.add(new JunkAttribute(junk));
             count++;
         }
+
         ctx.log().debug("fileCrasher: attached junk attribute to " + count + " classes");
     }
 
     private static final class JunkAttribute extends Attribute {
+
         private final byte[] data;
 
         JunkAttribute(byte[] data) {

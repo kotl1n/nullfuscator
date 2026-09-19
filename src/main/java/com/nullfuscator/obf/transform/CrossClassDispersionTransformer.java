@@ -4,16 +4,7 @@ import com.nullfuscator.obf.core.Limits;
 import com.nullfuscator.obf.core.ObfContext;
 import com.nullfuscator.obf.core.Transformer;
 import org.objectweb.asm.Opcodes;
-import org.objectweb.asm.tree.AbstractInsnNode;
-import org.objectweb.asm.tree.ClassNode;
-import org.objectweb.asm.tree.FieldInsnNode;
-import org.objectweb.asm.tree.FieldNode;
-import org.objectweb.asm.tree.InsnList;
-import org.objectweb.asm.tree.InsnNode;
-import org.objectweb.asm.tree.LdcInsnNode;
-import org.objectweb.asm.tree.MethodInsnNode;
-import org.objectweb.asm.tree.MethodNode;
-import org.objectweb.asm.tree.VarInsnNode;
+import org.objectweb.asm.tree.*;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -26,17 +17,33 @@ public final class CrossClassDispersionTransformer implements Transformer {
     private static final String INT_STATE = "$i";
     private static final String LONG_STATE = "$j";
 
-    @Override public String id() { return "crossClassDispersion"; }
-    @Override public String description() { return "relocate ops into cross-class static helpers"; }
-
     private static final Map<Integer, String[]> OPS = new HashMap<>();
+
     static {
-        int[] intOps  = { Opcodes.IADD, Opcodes.ISUB, Opcodes.IMUL, Opcodes.ISHL,
-                          Opcodes.ISHR, Opcodes.IUSHR, Opcodes.IAND, Opcodes.IOR, Opcodes.IXOR };
-        int[] longOps = { Opcodes.LADD, Opcodes.LSUB, Opcodes.LMUL,
-                          Opcodes.LAND, Opcodes.LOR, Opcodes.LXOR };
-        for (int op : intOps)  OPS.put(op, new String[] { "d" + op, "(II)I" });
-        for (int op : longOps) OPS.put(op, new String[] { "d" + op, "(JJ)J" });
+        int[] intOps = {
+                Opcodes.IADD, Opcodes.ISUB, Opcodes.IMUL, Opcodes.ISHL,
+                Opcodes.ISHR, Opcodes.IUSHR, Opcodes.IAND, Opcodes.IOR, Opcodes.IXOR
+        };
+        int[] longOps = {
+                Opcodes.LADD, Opcodes.LSUB, Opcodes.LMUL,
+                Opcodes.LAND, Opcodes.LOR, Opcodes.LXOR
+        };
+        for (int op : intOps) {
+            OPS.put(op, new String[] { "d" + op, "(II)I" });
+        }
+        for (int op : longOps) {
+            OPS.put(op, new String[] { "d" + op, "(JJ)J" });
+        }
+    }
+
+    @Override
+    public String id() {
+        return "crossClassDispersion";
+    }
+
+    @Override
+    public String description() {
+        return "relocate ops into cross-class static helpers";
     }
 
     @Override
@@ -50,7 +57,10 @@ public final class CrossClassDispersionTransformer implements Transformer {
         int maxHelpers = bounded(section.getInt("maxHelpers", 2048), 0, 8192, "maxHelpers");
         int maxOperations = bounded(section.getInt("maxOperations", 8192), 0,
                 Integer.MAX_VALUE, "maxOperations");
-        if (percent == 0 || maxPerClass == 0 || maxHelpers == 0 || maxOperations == 0) return;
+
+        if (percent == 0 || maxPerClass == 0 || maxHelpers == 0 || maxOperations == 0) {
+            return;
+        }
 
         List<ClassNode> targets = ctx.targets(id());
         Random rnd = ctx.random();
@@ -60,36 +70,63 @@ public final class CrossClassDispersionTransformer implements Transformer {
         Map<Integer, List<Helper>> helpers = new HashMap<>();
         int helperCount = 0;
         int replaced = 0;
+
         outer:
         for (ClassNode cn : targets) {
-            if (ctx.isDispersionCarrier(cn)) continue;
+            if (ctx.isDispersionCarrier(cn)) {
+                continue;
+            }
+
             int classReplaced = 0;
             classLoop:
             for (MethodNode mn : cn.methods) {
-                if (ctx.isHotPath(cn, mn)) continue;
-                if ((mn.access & (Opcodes.ACC_ABSTRACT | Opcodes.ACC_NATIVE)) != 0) continue;
-                if (mn.instructions == null || mn.instructions.size() == 0) continue;
-                if (Limits.oversizeMethod(mn)) continue;
+                if (ctx.isHotPath(cn, mn)) {
+                    continue;
+                }
+                if ((mn.access & (Opcodes.ACC_ABSTRACT | Opcodes.ACC_NATIVE)) != 0) {
+                    continue;
+                }
+                if (mn.instructions == null || mn.instructions.size() == 0) {
+                    continue;
+                }
+                if (Limits.oversizeMethod(mn)) {
+                    continue;
+                }
+
                 for (AbstractInsnNode insn : mn.instructions.toArray()) {
-                    if (replaced >= maxOperations) break outer;
-                    if (classReplaced >= maxPerClass) break classLoop;
-                    if (insn.getType() != AbstractInsnNode.INSN) continue;
+                    if (replaced >= maxOperations) {
+                        break outer;
+                    }
+                    if (classReplaced >= maxPerClass) {
+                        break classLoop;
+                    }
+                    if (insn.getType() != AbstractInsnNode.INSN) {
+                        continue;
+                    }
+
                     String[] shape = OPS.get(insn.getOpcode());
-                    if (shape == null || rnd.nextInt(100) >= percent) continue;
+                    if (shape == null || rnd.nextInt(100) >= percent) {
+                        continue;
+                    }
+
                     List<Helper> family = helpers.computeIfAbsent(insn.getOpcode(), k -> new ArrayList<>());
                     int slot = rnd.nextInt(sinkCount * variants);
                     Helper helper;
+
                     if (slot >= family.size() && helperCount < maxHelpers) {
                         int sinkIndex = helperCount % sinkCount;
                         if (sinkIndex == sinks.size()) {
                             String name;
-                            do { name = "a/d/" + ctx.names().next(); }
-                            while (ctx.getClass(name) != null);
+                            do {
+                                name = "a/d/" + ctx.names().next();
+                            } while (ctx.getClass(name) != null);
+
                             ClassNode sink = buildSink(name, rnd);
                             ctx.markDispersionCarrier(sink);
                             ctx.putClass(sink);
                             sinks.add(sink);
                         }
+
                         ClassNode sink = sinks.get(sinkIndex);
                         String name = "d" + ctx.names().next();
                         sink.methods.add(compositeHelper(sink.name, name, shape[1], insn.getOpcode(), rnd));
@@ -98,9 +135,12 @@ public final class CrossClassDispersionTransformer implements Transformer {
                         helperCount++;
                     } else {
                         // A saturated budget must never substitute a different opcode.
-                        if (family.isEmpty()) continue;
+                        if (family.isEmpty()) {
+                            continue;
+                        }
                         helper = family.get(slot % family.size());
                     }
+
                     mn.instructions.set(insn, new MethodInsnNode(Opcodes.INVOKESTATIC,
                             helper.owner(), helper.name(), shape[1], false));
                     replaced++;
@@ -108,17 +148,20 @@ public final class CrossClassDispersionTransformer implements Transformer {
                 }
             }
         }
+
         ctx.log().debug("crossClassDispersion: " + replaced + " ops, " + helperCount
                 + " shared helpers, " + sinks.size() + " sinks; limits=" + maxOperations
                 + " ops, " + maxHelpers + " helpers, " + maxPerClass + "/source class");
     }
 
-    private record Helper(String owner, String name) { }
+    private record Helper(String owner, String name) {
+    }
 
     private static int bounded(int value, int min, int max, String key) {
-        if (value < min || value > max)
+        if (value < min || value > max) {
             throw new IllegalArgumentException("crossClassDispersion." + key
                     + " must be between " + min + " and " + max);
+        }
         return value;
     }
 
@@ -161,9 +204,12 @@ public final class CrossClassDispersionTransformer implements Transformer {
         MethodNode mn = new MethodNode(Opcodes.ASM9, Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC,
                 name, desc, null, null);
         InsnList il = mn.instructions;
+
         if (wide) {
-            long mask = rnd.nextLong(), delta = rnd.nextLong();
+            long mask = rnd.nextLong();
+            long delta = rnd.nextLong();
             int rotation = 1 + rnd.nextInt(63);
+
             il.add(new VarInsnNode(Opcodes.LLOAD, 0));
             il.add(new VarInsnNode(Opcodes.LLOAD, 2));
             il.add(new InsnNode(opcode));
@@ -190,15 +236,22 @@ public final class CrossClassDispersionTransformer implements Transformer {
                     "rotateRight", "(JI)J", false));
             il.add(new VarInsnNode(Opcodes.LLOAD, 6));
             il.add(new InsnNode(Opcodes.LXOR));
-            il.add(new LdcInsnNode(mask)); il.add(new InsnNode(Opcodes.LXOR));
-            il.add(new LdcInsnNode(delta)); il.add(new InsnNode(Opcodes.LADD));
-            il.add(new LdcInsnNode(delta)); il.add(new InsnNode(Opcodes.LSUB));
-            il.add(new LdcInsnNode(mask)); il.add(new InsnNode(Opcodes.LXOR));
+            il.add(new LdcInsnNode(mask));
+            il.add(new InsnNode(Opcodes.LXOR));
+            il.add(new LdcInsnNode(delta));
+            il.add(new InsnNode(Opcodes.LADD));
+            il.add(new LdcInsnNode(delta));
+            il.add(new InsnNode(Opcodes.LSUB));
+            il.add(new LdcInsnNode(mask));
+            il.add(new InsnNode(Opcodes.LXOR));
             il.add(new InsnNode(Opcodes.LRETURN));
-            mn.maxLocals = 8; mn.maxStack = 4;
+            mn.maxLocals = 8;
+            mn.maxStack = 4;
         } else {
-            int mask = rnd.nextInt(), delta = rnd.nextInt();
+            int mask = rnd.nextInt();
+            int delta = rnd.nextInt();
             int rotation = 1 + rnd.nextInt(31);
+
             il.add(new VarInsnNode(Opcodes.ILOAD, 0));
             il.add(new VarInsnNode(Opcodes.ILOAD, 1));
             il.add(new InsnNode(opcode));
@@ -225,14 +278,18 @@ public final class CrossClassDispersionTransformer implements Transformer {
                     "rotateRight", "(II)I", false));
             il.add(new VarInsnNode(Opcodes.ILOAD, 3));
             il.add(new InsnNode(Opcodes.IXOR));
-            il.add(new LdcInsnNode(mask)); il.add(new InsnNode(Opcodes.IXOR));
-            il.add(new LdcInsnNode(delta)); il.add(new InsnNode(Opcodes.IADD));
-            il.add(new LdcInsnNode(delta)); il.add(new InsnNode(Opcodes.ISUB));
-            il.add(new LdcInsnNode(mask)); il.add(new InsnNode(Opcodes.IXOR));
+            il.add(new LdcInsnNode(mask));
+            il.add(new InsnNode(Opcodes.IXOR));
+            il.add(new LdcInsnNode(delta));
+            il.add(new InsnNode(Opcodes.IADD));
+            il.add(new LdcInsnNode(delta));
+            il.add(new InsnNode(Opcodes.ISUB));
+            il.add(new LdcInsnNode(mask));
+            il.add(new InsnNode(Opcodes.IXOR));
             il.add(new InsnNode(Opcodes.IRETURN));
-            mn.maxLocals = 4; mn.maxStack = 3;
+            mn.maxLocals = 4;
+            mn.maxStack = 3;
         }
         return mn;
     }
-
 }

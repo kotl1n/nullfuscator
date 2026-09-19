@@ -5,8 +5,11 @@ import com.nullfuscator.obf.core.ObfConfig;
 import java.util.List;
 
 public final class ConfigRegression {
+
     private static void check(boolean value, String message) {
-        if (!value) throw new AssertionError(message);
+        if (!value) {
+            throw new AssertionError(message);
+        }
     }
 
     public static void main(String[] args) {
@@ -31,7 +34,8 @@ public final class ConfigRegression {
         check(methods.getStringList("chars").equals(List.of("x", "y")), "naming chars missing");
         check(!fields.present(), "defaults made an absent section present");
 
-        ObfConfig legacy = ObfConfig.parse("fieldRenamer { enabled = true, exempt = [ \"class{^legacy/}\" ] }");
+        ObfConfig legacy = ObfConfig.parse(
+                "fieldRenamer { enabled = true, exempt = [ \"class{^legacy/}\" ] }");
         check(legacy.section("fieldRenamer").isExempt("legacy/Example"), "legacy exemption failed");
         check(legacy.section("fieldRenamer").enabled(), "legacy section failed");
 

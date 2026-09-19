@@ -32,9 +32,13 @@ public final class ObfContext {
     private final Set<String> dispersionCarriers = new HashSet<>();
     private final Map<String, String> originalNames = new LinkedHashMap<>();
     private final Map<MethodNode, String> originalMethods = new IdentityHashMap<>();
-    private final Set<AbstractInsnNode> encodedNumbers = java.util.Collections.newSetFromMap(new IdentityHashMap<>());
-    private final Set<MethodNode> inputMethods = java.util.Collections.newSetFromMap(new IdentityHashMap<>());
-    private final Set<MethodNode> semanticCoreMethods = java.util.Collections.newSetFromMap(new IdentityHashMap<>());
+    private final Set<AbstractInsnNode> encodedNumbers =
+            java.util.Collections.newSetFromMap(new IdentityHashMap<>());
+    private final Set<MethodNode> inputMethods =
+            java.util.Collections.newSetFromMap(new IdentityHashMap<>());
+    private final Set<MethodNode> semanticCoreMethods =
+            java.util.Collections.newSetFromMap(new IdentityHashMap<>());
+
     private ExemptMatcher hotPaths;
     private IntegrityPlan integrityPlan;
     private RunReport report;
@@ -48,28 +52,49 @@ public final class ObfContext {
         this.names = names;
     }
 
-    public Collection<ClassNode> classes() { return classes.values(); }
-    public Map<String, ClassNode> classMap() { return classes; }
-    public ClassNode getClass(String internalName) { return classes.get(internalName); }
+    public Collection<ClassNode> classes() {
+        return classes.values();
+    }
 
-    public void putClass(ClassNode cn) { classes.put(cn.name, cn); }
+    public Map<String, ClassNode> classMap() {
+        return classes;
+    }
 
-    public void removeClass(String internalName) { classes.remove(internalName); }
+    public ClassNode getClass(String internalName) {
+        return classes.get(internalName);
+    }
+
+    public void putClass(ClassNode cn) {
+        classes.put(cn.name, cn);
+    }
+
+    public void removeClass(String internalName) {
+        classes.remove(internalName);
+    }
 
     public void reindex() {
         List<ClassNode> all = new ArrayList<>(classes.values());
         classes.clear();
-        for (ClassNode cn : all) classes.put(cn.name, cn);
+        for (ClassNode cn : all) {
+            classes.put(cn.name, cn);
+        }
     }
 
-    public List<ClassNode> snapshot() { return new ArrayList<>(classes.values()); }
+    public List<ClassNode> snapshot() {
+        return new ArrayList<>(classes.values());
+    }
 
-    public Map<String, byte[]> resources() { return resources; }
+    public Map<String, byte[]> resources() {
+        return resources;
+    }
 
-    public ObfConfig config() { return config; }
+    public ObfConfig config() {
+        return config;
+    }
 
     public boolean isExempt(String sectionId, ClassNode cn) {
-        return cn == null || isMixin(cn) || config.section(sectionId).isExempt(cn.name)
+        return cn == null || isMixin(cn)
+                || config.section(sectionId).isExempt(cn.name)
                 || config.section(sectionId).isExempt(originalName(cn.name));
     }
 
@@ -81,12 +106,15 @@ public final class ObfContext {
                 && cn.invisibleAnnotations.stream().anyMatch(a -> marker.equals(a.desc)));
     }
 
-    public String originalName(String name) { return originalNames.getOrDefault(name, name); }
+    public String originalName(String name) {
+        return originalNames.getOrDefault(name, name);
+    }
 
     public void remapOriginalNames(Map<String, String> renames) {
         Map<String, String> updated = new LinkedHashMap<>();
-        for (String name : classes.keySet())
+        for (String name : classes.keySet()) {
             updated.put(renames.getOrDefault(name, name), originalName(name));
+        }
         originalNames.clear();
         originalNames.putAll(updated);
     }
@@ -102,89 +130,154 @@ public final class ObfContext {
         }
     }
 
-    public IntegrityPlan integrityPlan() { return integrityPlan; }
-    public void integrityPlan(IntegrityPlan plan) { integrityPlan = plan; }
+    public IntegrityPlan integrityPlan() {
+        return integrityPlan;
+    }
+
+    public void integrityPlan(IntegrityPlan plan) {
+        integrityPlan = plan;
+    }
 
     public List<ClassNode> targets(String sectionId) {
         ObfConfig.Section s = config.section(sectionId);
         List<ClassNode> out = new ArrayList<>();
         for (ClassNode cn : classes.values()) {
-
             boolean moduleInfo = "module-info".equals(cn.name)
                     || (cn.access & Opcodes.ACC_MODULE) != 0;
-            if (!moduleInfo && !isExempt(sectionId, cn)) out.add(cn);
+            if (!moduleInfo && !isExempt(sectionId, cn)) {
+                out.add(cn);
+            }
         }
         return out;
     }
 
     public boolean isModularJar() {
         ClassNode module = classes.get("module-info");
-        if (module != null) return true;
+        if (module != null) {
+            return true;
+        }
         for (ClassNode cn : classes.values()) {
-            if ((cn.access & Opcodes.ACC_MODULE) != 0) return true;
+            if ((cn.access & Opcodes.ACC_MODULE) != 0) {
+                return true;
+            }
         }
         return false;
     }
 
-    public Random random() { return random; }
-    public long seed() { return seed; }
-    public ObfLog log() { return log; }
-    public NameGenerator names() { return names; }
-    public ObfMapping mapping() { return mapping; }
-    public RunReport report() { return report; }
-    public void report(RunReport value) { report = value; }
-    public long inputJarBytes() { return inputJarBytes; }
-    public void inputJarBytes(long value) { inputJarBytes = value; }
+    public Random random() {
+        return random;
+    }
+
+    public long seed() {
+        return seed;
+    }
+
+    public ObfLog log() {
+        return log;
+    }
+
+    public NameGenerator names() {
+        return names;
+    }
+
+    public ObfMapping mapping() {
+        return mapping;
+    }
+
+    public RunReport report() {
+        return report;
+    }
+
+    public void report(RunReport value) {
+        report = value;
+    }
+
+    public long inputJarBytes() {
+        return inputJarBytes;
+    }
+
+    public void inputJarBytes(long value) {
+        inputJarBytes = value;
+    }
 
     public String methodOrigin(ClassNode cn, MethodNode mn) {
-        return originalName(cn.name) + "#" + originalMethods.getOrDefault(mn, mn.name + mn.desc);
+        return originalName(cn.name) + "#"
+                + originalMethods.getOrDefault(mn, mn.name + mn.desc);
     }
 
     /** Numeric encoding is consumed by antiAI before the first remapping pass. */
-    public void markEncodedNumber(AbstractInsnNode instruction) { encodedNumbers.add(instruction); }
-    public boolean isEncodedNumber(AbstractInsnNode instruction) { return encodedNumbers.contains(instruction); }
-    public void clearEncodedNumbers() { encodedNumbers.clear(); }
+    public void markEncodedNumber(AbstractInsnNode instruction) {
+        encodedNumbers.add(instruction);
+    }
+
+    public boolean isEncodedNumber(AbstractInsnNode instruction) {
+        return encodedNumbers.contains(instruction);
+    }
+
+    public void clearEncodedNumbers() {
+        encodedNumbers.clear();
+    }
 
     public boolean isInputMethod(MethodNode method) {
-        if (hotPaths == null) initializePolicies();
+        if (hotPaths == null) {
+            initializePolicies();
+        }
         return inputMethods.contains(method);
     }
 
     public void transferInputMethod(MethodNode source, MethodNode target) {
-        if (inputMethods.contains(source)) inputMethods.add(target);
+        if (inputMethods.contains(source)) {
+            inputMethods.add(target);
+        }
     }
 
-    public void markSemanticCoreMethod(MethodNode method) { semanticCoreMethods.add(method); }
-    public boolean isSemanticCoreMethod(MethodNode method) { return semanticCoreMethods.contains(method); }
+    public void markSemanticCoreMethod(MethodNode method) {
+        semanticCoreMethods.add(method);
+    }
+
+    public boolean isSemanticCoreMethod(MethodNode method) {
+        return semanticCoreMethods.contains(method);
+    }
 
     public void initializePolicies() {
-        if (hotPaths != null) return;
+        if (hotPaths != null) {
+            return;
+        }
         hotPaths = new ExemptMatcher(config.section("hotPaths").getStringList("exclude"));
-        for (ClassNode cn : classes.values())
+        for (ClassNode cn : classes.values()) {
             for (MethodNode mn : cn.methods) {
                 originalMethods.putIfAbsent(mn, mn.name + mn.desc);
                 inputMethods.add(mn);
             }
+        }
     }
 
     /** Hot paths use original class/method identities and survive class remapping. */
     public boolean isHotPath(ClassNode cn, MethodNode mn) {
-        if (hotPaths == null) initializePolicies();
+        if (hotPaths == null) {
+            initializePolicies();
+        }
         String owner = originalName(cn.name);
         String method = originalMethods.getOrDefault(mn, mn.name + mn.desc);
         int descriptor = method.indexOf('(');
         String name = descriptor < 0 ? mn.name : method.substring(0, descriptor);
         String desc = descriptor < 0 ? mn.desc : method.substring(descriptor);
-        return hotPaths.matches(owner) || hotPaths.matchesMethod(owner, name, desc)
+        return hotPaths.matches(owner)
+                || hotPaths.matchesMethod(owner, name, desc)
                 || hotPaths.matchesAnnotations(cn, mn);
     }
 
     public boolean isHotClass(ClassNode cn) {
-        if (hotPaths == null) initializePolicies();
-        return hotPaths.matches(originalName(cn.name)) || hotPaths.matchesAnnotations(cn, null);
+        if (hotPaths == null) {
+            initializePolicies();
+        }
+        return hotPaths.matches(originalName(cn.name))
+                || hotPaths.matchesAnnotations(cn, null);
     }
 
-    public void markDispersionCarrier(ClassNode cn) { dispersionCarriers.add(cn.name); }
+    public void markDispersionCarrier(ClassNode cn) {
+        dispersionCarriers.add(cn.name);
+    }
 
     public boolean isDispersionCarrier(ClassNode cn) {
         return cn != null && dispersionCarriers.contains(cn.name);
@@ -192,8 +285,9 @@ public final class ObfContext {
 
     public void remapDispersionCarriers(Map<String, String> classMap) {
         Set<String> remapped = new HashSet<>();
-        for (String oldName : dispersionCarriers)
+        for (String oldName : dispersionCarriers) {
             remapped.add(classMap.getOrDefault(oldName, oldName));
+        }
         dispersionCarriers.clear();
         dispersionCarriers.addAll(remapped);
     }
@@ -202,7 +296,10 @@ public final class ObfContext {
         stringStates.put(site, new StringStateBinding(stateVar, encodedState));
     }
 
-    public StringStateBinding stringState(LdcInsnNode site) { return stringStates.get(site); }
+    public StringStateBinding stringState(LdcInsnNode site) {
+        return stringStates.get(site);
+    }
 
-    public record StringStateBinding(int stateVar, int encodedState) { }
+    public record StringStateBinding(int stateVar, int encodedState) {
+    }
 }

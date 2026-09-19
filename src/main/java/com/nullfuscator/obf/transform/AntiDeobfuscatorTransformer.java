@@ -3,19 +3,7 @@ package com.nullfuscator.obf.transform;
 import com.nullfuscator.obf.core.ObfContext;
 import com.nullfuscator.obf.core.Transformer;
 import org.objectweb.asm.Opcodes;
-import org.objectweb.asm.tree.AnnotationNode;
-import org.objectweb.asm.tree.ClassNode;
-import org.objectweb.asm.tree.FieldInsnNode;
-import org.objectweb.asm.tree.FieldNode;
-import org.objectweb.asm.tree.InnerClassNode;
-import org.objectweb.asm.tree.InsnList;
-import org.objectweb.asm.tree.InsnNode;
-import org.objectweb.asm.tree.JumpInsnNode;
-import org.objectweb.asm.tree.LabelNode;
-import org.objectweb.asm.tree.MethodInsnNode;
-import org.objectweb.asm.tree.MethodNode;
-import org.objectweb.asm.tree.TableSwitchInsnNode;
-import org.objectweb.asm.tree.TryCatchBlockNode;
+import org.objectweb.asm.tree.*;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -276,8 +264,6 @@ public final class AntiDeobfuscatorTransformer implements Transformer {
     }
 
     private FieldNode cachedTrapException(ClassNode cn, ObfContext ctx, Random rnd, Set<String> keys) {
-        // This control token never escapes its local handler and carries no per-call data.
-        // Reusing it avoids allocation and native stack capture on the live trap path.
         String type = switch (rnd.nextInt(4)) {
             case 0 -> "java/lang/IllegalStateException";
             case 1 -> "java/lang/IllegalArgumentException";

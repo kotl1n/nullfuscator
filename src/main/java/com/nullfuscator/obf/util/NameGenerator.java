@@ -5,27 +5,34 @@ import java.util.Random;
 import java.util.Set;
 
 public final class NameGenerator {
+
     private static final int RANDOM_ATTEMPT_LIMIT = 64;
+
     private final String[] tokens;
     private final Set<String> used = new HashSet<>();
     private long counter = 0;
 
     public NameGenerator(String[] tokens) {
-        if (tokens == null || tokens.length == 0)
+        if (tokens == null || tokens.length == 0) {
             tokens = new String[] { "I", "l", "1", "lI" };
+        }
         this.tokens = tokens;
     }
 
     public synchronized String next() {
         String s;
-        do { s = encode(counter++); } while (!used.add(s));
+        do {
+            s = encode(counter++);
+        } while (!used.add(s));
         return s;
     }
 
     public synchronized String nextClass(String prefix) {
         String p = (prefix == null) ? "" : prefix;
         String s;
-        do { s = p + encode(counter++); } while (!used.add(s));
+        do {
+            s = p + encode(counter++);
+        } while (!used.add(s));
         return s;
     }
 
@@ -34,9 +41,13 @@ public final class NameGenerator {
         for (int attempt = 0; attempt < RANDOM_ATTEMPT_LIMIT; attempt++) {
             int width = 1 + random.nextInt(depth);
             StringBuilder sb = new StringBuilder();
-            for (int i = 0; i < width; i++) sb.append(tokens[random.nextInt(tokens.length)]);
+            for (int i = 0; i < width; i++) {
+                sb.append(tokens[random.nextInt(tokens.length)]);
+            }
             String candidate = sb.toString();
-            if (used.add(candidate)) return candidate;
+            if (used.add(candidate)) {
+                return candidate;
+            }
         }
         return next();
     }
@@ -47,14 +58,20 @@ public final class NameGenerator {
         for (int attempt = 0; attempt < RANDOM_ATTEMPT_LIMIT; attempt++) {
             int width = 1 + random.nextInt(depth);
             StringBuilder sb = new StringBuilder(p);
-            for (int i = 0; i < width; i++) sb.append(tokens[random.nextInt(tokens.length)]);
+            for (int i = 0; i < width; i++) {
+                sb.append(tokens[random.nextInt(tokens.length)]);
+            }
             String candidate = sb.toString();
-            if (used.add(candidate)) return candidate;
+            if (used.add(candidate)) {
+                return candidate;
+            }
         }
         return nextClass(p);
     }
 
-    public synchronized void reserve(String name) { used.add(name); }
+    public synchronized void reserve(String name) {
+        used.add(name);
+    }
 
     private String encode(long n) {
         int base = tokens.length;

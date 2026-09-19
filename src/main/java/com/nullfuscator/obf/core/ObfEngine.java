@@ -6,7 +6,9 @@ public final class ObfEngine {
 
     private final List<Transformer> pipeline;
 
-    public ObfEngine(List<Transformer> pipeline) { this.pipeline = pipeline; }
+    public ObfEngine(List<Transformer> pipeline) { 
+        this.pipeline = pipeline;
+        }
 
     public void run(ObfContext ctx) {
         ctx.initializePolicies();

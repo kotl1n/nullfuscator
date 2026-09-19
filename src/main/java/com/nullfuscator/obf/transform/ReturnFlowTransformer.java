@@ -15,40 +15,53 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
-import static org.objectweb.asm.Opcodes.ACC_ABSTRACT;
-import static org.objectweb.asm.Opcodes.ACC_NATIVE;
-import static org.objectweb.asm.Opcodes.BIPUSH;
-import static org.objectweb.asm.Opcodes.ICONST_0;
-import static org.objectweb.asm.Opcodes.IRETURN;
-import static org.objectweb.asm.Opcodes.IXOR;
-import static org.objectweb.asm.Opcodes.LRETURN;
-import static org.objectweb.asm.Opcodes.LXOR;
-import static org.objectweb.asm.Opcodes.LCONST_0;
-import static org.objectweb.asm.Opcodes.LCONST_1;
-import static org.objectweb.asm.Opcodes.SIPUSH;
+import static org.objectweb.asm.Opcodes.*;
 
 public final class ReturnFlowTransformer implements Transformer {
 
-    @Override public String id() { return "integerReturn"; }
-    @Override public String description() { return "opaque-identity integer returns"; }
+    @Override
+    public String id() {
+        return "integerReturn";
+    }
+
+    @Override
+    public String description() {
+        return "opaque-identity integer returns";
+    }
 
     @Override
     public void transform(ObfContext ctx) {
         Random rnd = ctx.random();
-        int methods = 0, sites = 0;
+        int methods = 0;
+        int sites = 0;
+
         for (ClassNode cn : ctx.targets(id())) {
             for (MethodNode mn : cn.methods) {
-                if (ctx.isHotPath(cn, mn)) continue;
-                if ((mn.access & (ACC_ABSTRACT | ACC_NATIVE)) != 0) continue;
-                if (mn.instructions == null || mn.instructions.size() == 0) continue;
+                if (ctx.isHotPath(cn, mn)) {
+                    continue;
+                }
+                if ((mn.access & (ACC_ABSTRACT | ACC_NATIVE)) != 0) {
+                    continue;
+                }
+                if (mn.instructions == null || mn.instructions.size() == 0) {
+                    continue;
+                }
+
                 int returnSort = Type.getReturnType(mn.desc).getSort();
                 boolean longKind = returnSort == Type.LONG;
-                if (!longKind && !isIntKind(returnSort)) continue;
+                if (!longKind && !isIntKind(returnSort)) {
+                    continue;
+                }
 
                 List<AbstractInsnNode> rets = new ArrayList<>();
-                for (AbstractInsnNode n = mn.instructions.getFirst(); n != null; n = n.getNext())
-                    if (n.getOpcode() == (longKind ? LRETURN : IRETURN)) rets.add(n);
-                if (rets.isEmpty()) continue;
+                for (AbstractInsnNode n = mn.instructions.getFirst(); n != null; n = n.getNext()) {
+                    if (n.getOpcode() == (longKind ? LRETURN : IRETURN)) {
+                        rets.add(n);
+                    }
+                }
+                if (rets.isEmpty()) {
+                    continue;
+                }
 
                 for (AbstractInsnNode ret : rets) {
                     int pairs = 1 + rnd.nextInt(2);
@@ -74,6 +87,7 @@ public final class ReturnFlowTransformer implements Transformer {
                 methods++;
             }
         }
+
         ctx.log().debug("integerReturn: " + sites + " return sites across " + methods + " methods");
     }
 
@@ -83,15 +97,24 @@ public final class ReturnFlowTransformer implements Transformer {
     }
 
     private static void pushInt(InsnList il, int v) {
-        if (v >= -1 && v <= 5) il.add(new InsnNode(ICONST_0 + v));
-        else if (v >= Byte.MIN_VALUE && v <= Byte.MAX_VALUE) il.add(new IntInsnNode(BIPUSH, v));
-        else if (v >= Short.MIN_VALUE && v <= Short.MAX_VALUE) il.add(new IntInsnNode(SIPUSH, v));
-        else il.add(new LdcInsnNode(Integer.valueOf(v)));
+        if (v >= -1 && v <= 5) {
+            il.add(new InsnNode(ICONST_0 + v));
+        } else if (v >= Byte.MIN_VALUE && v <= Byte.MAX_VALUE) {
+            il.add(new IntInsnNode(BIPUSH, v));
+        } else if (v >= Short.MIN_VALUE && v <= Short.MAX_VALUE) {
+            il.add(new IntInsnNode(SIPUSH, v));
+        } else {
+            il.add(new LdcInsnNode(Integer.valueOf(v)));
+        }
     }
 
     private static void pushLong(InsnList il, long v) {
-        if (v == 0L) il.add(new InsnNode(LCONST_0));
-        else if (v == 1L) il.add(new InsnNode(LCONST_1));
-        else il.add(new LdcInsnNode(Long.valueOf(v)));
+        if (v == 0L) {
+            il.add(new InsnNode(LCONST_0));
+        } else if (v == 1L) {
+            il.add(new InsnNode(LCONST_1));
+        } else {
+            il.add(new LdcInsnNode(Long.valueOf(v)));
+        }
     }
 }

@@ -24,14 +24,18 @@ public final class ObfConfig {
     private final Set<File> sourceFiles;
     private final Map<String, Section> sections = new ConcurrentHashMap<>();
 
-    private ObfConfig(Config root) { this(root, Set.of()); }
+    private ObfConfig(Config root) {
+        this(root, Set.of());
+    }
 
     private ObfConfig(Config root, Set<File> sourceFiles) {
         this.root = root;
         this.sourceFiles = Set.copyOf(sourceFiles);
     }
 
-    public Set<File> sourceFiles() { return sourceFiles; }
+    public Set<File> sourceFiles() {
+        return sourceFiles;
+    }
 
     public static ObfConfig load(File hocon) {
         Set<File> sources = new HashSet<>();
@@ -48,27 +52,36 @@ public final class ObfConfig {
     public static ObfConfig loadPreset(String name) {
         String content = readPresetContent(name);
         Config config = ConfigFactory.parseString(content,
-                ConfigParseOptions.defaults().setOriginDescription("preset:" + normalizePresetName(name))).resolve();
+                        ConfigParseOptions.defaults()
+                                .setOriginDescription("preset:" + normalizePresetName(name)))
+                .resolve();
         return new ObfConfig(config, Set.of());
     }
 
     public static String normalizePresetName(String name) {
-        if (name == null) return null;
+        if (name == null) {
+            return null;
+        }
         String clean = name.trim().toLowerCase();
-        if (clean.endsWith(".hocon")) clean = clean.substring(0, clean.length() - 6);
+        if (clean.endsWith(".hocon")) {
+            clean = clean.substring(0, clean.length() - 6);
+        }
         return clean;
     }
 
     public static boolean isKnownPreset(String name) {
         String clean = normalizePresetName(name);
-        return "light".equals(clean) || "balanced".equals(clean) || "strong".equals(clean) || "full".equals(clean);
+        return "light".equals(clean) || "balanced".equals(clean)
+                || "strong".equals(clean) || "full".equals(clean);
     }
 
     public static String readPresetContent(String name) {
         String clean = normalizePresetName(name);
         if (!isKnownPreset(clean)) {
-            throw new IllegalArgumentException("unknown preset: '" + name + "'. Available presets: light, balanced, strong, full");
+            throw new IllegalArgumentException("unknown preset: '" + name
+                    + "'. Available presets: light, balanced, strong, full");
         }
+
         String resourcePath = "/presets/" + clean + ".hocon";
         try (java.io.InputStream in = ObfConfig.class.getResourceAsStream(resourcePath)) {
             if (in != null) {
@@ -77,33 +90,49 @@ public final class ObfConfig {
         } catch (java.io.IOException e) {
             throw new RuntimeException("failed to read preset " + clean, e);
         }
+
         File local = new File("config/" + clean + ".hocon");
         if (local.isFile()) {
             try {
-                return java.nio.file.Files.readString(local.toPath(), java.nio.charset.StandardCharsets.UTF_8);
-            } catch (java.io.IOException ignored) {}
+                return java.nio.file.Files.readString(local.toPath(),
+                        java.nio.charset.StandardCharsets.UTF_8);
+            } catch (java.io.IOException ignored) {
+                // Fall through to the exception below.
+            }
         }
         throw new IllegalArgumentException("preset resource not found: " + resourcePath);
     }
 
-    public record PresetInfo(String name, String protectionLevel, String sizeImpact, String runtimeOverhead, String description) {}
+    public record PresetInfo(String name, String protectionLevel, String sizeImpact,
+                             String runtimeOverhead, String description) {
+    }
 
     public static final List<PresetInfo> PRESET_INFOS = List.of(
-            new PresetInfo("light", "Basic", "+5% .. +15%", "<1%", "High-performance services, tick loops, games, Fabric mods"),
-            new PresetInfo("balanced", "High", "+20% .. +50%", "1% .. 5%", "Production commercial software, enterprise APIs (Recommended)"),
-            new PresetInfo("strong", "Very High", "+50% .. +120%", "5% .. 15%", "Sensitive licensing modules, proprietary algorithms"),
-            new PresetInfo("full", "Maximum", "~5.5x", "High", "Maximum paranoia, crack-mes, core cryptographic routines")
+            new PresetInfo("light", "Basic", "+5% .. +15%", "<1%",
+                    "High-performance services, tick loops, games, Fabric mods"),
+            new PresetInfo("balanced", "High", "+20% .. +50%", "1% .. 5%",
+                    "Production commercial software, enterprise APIs (Recommended)"),
+            new PresetInfo("strong", "Very High", "+50% .. +120%", "5% .. 15%",
+                    "Sensitive licensing modules, proprietary algorithms"),
+            new PresetInfo("full", "Maximum", "~5.5x", "High",
+                    "Maximum paranoia, crack-mes, core cryptographic routines")
     );
 
     private static Config loadConfig(File file, Set<File> loading, Set<File> sources) {
-        if (!loading.add(file)) throw new IllegalArgumentException("configuration inheritance cycle at " + file);
+        if (!loading.add(file)) {
+            throw new IllegalArgumentException("configuration inheritance cycle at " + file);
+        }
         sources.add(file);
+
         Config own = ConfigFactory.parseFile(file,
                 ConfigParseOptions.defaults().setAllowMissing(false));
         for (var entry : own.entrySet()) {
             String filename = entry.getValue().origin().filename();
-            if (filename != null) sources.add(new File(filename));
+            if (filename != null) {
+                sources.add(new File(filename));
+            }
         }
+
         if (own.hasPath("baseConfig")) {
             String baseRef = own.getString("baseConfig");
             Config baseConfig;
@@ -122,6 +151,7 @@ public final class ObfConfig {
             }
             own = own.withFallback(baseConfig);
         }
+
         loading.remove(file);
         return own;
     }
@@ -134,18 +164,30 @@ public final class ObfConfig {
         return new ObfConfig(ConfigFactory.parseString(hocon).resolve());
     }
 
-    public Config raw() { return root; }
+    public Config raw() {
+        return root;
+    }
 
     public ObfConfig withAdditionalLibs(List<String> additional) {
-        if (additional.isEmpty()) return this;
+        if (additional.isEmpty()) {
+            return this;
+        }
         List<String> merged = new java.util.ArrayList<>(libs());
-        for (String path : additional) if (!merged.contains(path)) merged.add(path);
+        for (String path : additional) {
+            if (!merged.contains(path)) {
+                merged.add(path);
+            }
+        }
         return new ObfConfig(root.withValue("libs", ConfigValueFactory.fromIterable(merged)), sourceFiles);
     }
 
     public List<String> libs() {
         if (root.hasPath("libs")) {
-            try { return root.getStringList("libs"); } catch (RuntimeException ignored) {}
+            try {
+                return root.getStringList("libs");
+            } catch (RuntimeException ignored) {
+                // Fall through.
+            }
         }
         return Collections.emptyList();
     }
@@ -157,18 +199,24 @@ public final class ObfConfig {
             if (present && NAMING_SECTIONS.contains(key) && root.hasPath("defaults.naming")) {
                 section = section.withFallback(root.getConfig("defaults.naming"));
             }
+
             List<String> globalExempt = root.hasPath("defaults.exempt")
-                    ? safeStringList(root, "defaults.exempt") : Collections.emptyList();
+                    ? safeStringList(root, "defaults.exempt")
+                    : Collections.emptyList();
             return new Section(section, present, globalExempt);
         });
     }
 
     private static List<String> safeStringList(Config config, String path) {
-        try { return config.getStringList(path); }
-        catch (RuntimeException e) { return Collections.emptyList(); }
+        try {
+            return config.getStringList(path);
+        } catch (RuntimeException e) {
+            return Collections.emptyList();
+        }
     }
 
     public static final class Section {
+
         private final Config c;
         private final boolean present;
         private final ExemptMatcher exempt;
@@ -176,14 +224,21 @@ public final class ObfConfig {
         Section(Config c, boolean present, List<String> globalExempt) {
             this.c = c;
             this.present = present;
+
             LinkedHashSet<String> exemptions = new LinkedHashSet<>(globalExempt);
-            if (c.hasPath("exempt")) exemptions.addAll(safeStringList(c, "exempt"));
+            if (c.hasPath("exempt")) {
+                exemptions.addAll(safeStringList(c, "exempt"));
+            }
             this.exempt = new ExemptMatcher(new ArrayList<>(exemptions));
         }
 
-        public boolean enabled() { return getBoolean("enabled", false); }
+        public boolean enabled() {
+            return getBoolean("enabled", false);
+        }
 
-        public boolean present() { return present; }
+        public boolean present() {
+            return present;
+        }
 
         public int getInt(String path, int def) {
             return c.hasPath(path) ? c.getInt(path) : def;
@@ -205,9 +260,13 @@ public final class ObfConfig {
             return exempt.matches(internalName);
         }
 
-        public ExemptMatcher exempt() { return exempt; }
+        public ExemptMatcher exempt() {
+            return exempt;
+        }
 
-        public Config raw() { return c; }
+        public Config raw() {
+            return c;
+        }
 
         private static List<String> safeStringList(Config c, String path) {
             return ObfConfig.safeStringList(c, path);

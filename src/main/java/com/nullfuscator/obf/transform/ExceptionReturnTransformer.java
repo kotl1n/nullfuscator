@@ -5,19 +5,7 @@ import com.nullfuscator.obf.core.ObfContext;
 import com.nullfuscator.obf.core.Transformer;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
-import org.objectweb.asm.tree.AbstractInsnNode;
-import org.objectweb.asm.tree.ClassNode;
-import org.objectweb.asm.tree.FieldInsnNode;
-import org.objectweb.asm.tree.FieldNode;
-import org.objectweb.asm.tree.InsnList;
-import org.objectweb.asm.tree.InsnNode;
-import org.objectweb.asm.tree.JumpInsnNode;
-import org.objectweb.asm.tree.LabelNode;
-import org.objectweb.asm.tree.MethodInsnNode;
-import org.objectweb.asm.tree.MethodNode;
-import org.objectweb.asm.tree.TryCatchBlockNode;
-import org.objectweb.asm.tree.TypeInsnNode;
-import org.objectweb.asm.tree.VarInsnNode;
+import org.objectweb.asm.tree.*;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -25,48 +13,84 @@ import java.util.Random;
 
 public final class ExceptionReturnTransformer implements Transformer {
 
-    @Override public String id() { return "exceptionReturn"; }
-    @Override public String description() { return "route typed returns through a caught control exception"; }
+    @Override
+    public String id() {
+        return "exceptionReturn";
+    }
+
+    @Override
+    public String description() {
+        return "route typed returns through a caught control exception";
+    }
 
     @Override
     public void transform(ObfContext ctx) {
         ctx.initializePolicies();
         int percent = clamp(ctx.config().section(id()).getInt("percent", 100), 0, 100);
-        if (percent == 0) return;
+        if (percent == 0) {
+            return;
+        }
+
         List<ClassNode> targets = ctx.targets(id());
         int version = Opcodes.V1_7;
-        for (ClassNode cn : targets) version = Math.max(version, cn.version & 0xFFFF);
+        for (ClassNode cn : targets) {
+            version = Math.max(version, cn.version & 0xFFFF);
+        }
 
         Random rnd = ctx.random();
         String tokenName = "ez/rt/" + ctx.names().nextRandomClass("", rnd, 10);
         ClassNode token = buildToken(tokenName, version);
-        int methods = 0, sites = 0;
 
+        int methods = 0;
+        int sites = 0;
         for (ClassNode cn : targets) {
-            if ((cn.access & (Opcodes.ACC_INTERFACE | Opcodes.ACC_ANNOTATION | Opcodes.ACC_MODULE)) != 0) continue;
+            if ((cn.access & (Opcodes.ACC_INTERFACE | Opcodes.ACC_ANNOTATION | Opcodes.ACC_MODULE)) != 0) {
+                continue;
+            }
             for (MethodNode mn : cn.methods) {
-                if (!ctx.isInputMethod(mn) || ctx.isHotPath(cn, mn)) continue;
+                if (!ctx.isInputMethod(mn) || ctx.isHotPath(cn, mn)) {
+                    continue;
+                }
                 int count = eligibleReturnCount(mn);
-                if (count == 0 || rnd.nextInt(100) >= percent) continue;
+                if (count == 0 || rnd.nextInt(100) >= percent) {
+                    continue;
+                }
                 transformMethod(mn, tokenName);
                 methods++;
                 sites += count;
             }
         }
 
-        if (methods > 0) ctx.putClass(token);
+        if (methods > 0) {
+            ctx.putClass(token);
+        }
         ctx.log().debug("exceptionReturn: routed " + sites + " sites across " + methods + " methods");
     }
 
     private static int eligibleReturnCount(MethodNode mn) {
-        if ((mn.access & (Opcodes.ACC_ABSTRACT | Opcodes.ACC_NATIVE)) != 0) return 0;
-        if (mn.name.equals("<init>") || mn.name.equals("<clinit>")) return 0;
-        if (mn.instructions == null || mn.instructions.size() == 0) return 0;
-        if (mn.tryCatchBlocks != null && !mn.tryCatchBlocks.isEmpty()) return 0;
-        if (Limits.oversizeMethod(mn)) return 0;
+        if ((mn.access & (Opcodes.ACC_ABSTRACT | Opcodes.ACC_NATIVE)) != 0) {
+            return 0;
+        }
+        if (mn.name.equals("<init>") || mn.name.equals("<clinit>")) {
+            return 0;
+        }
+        if (mn.instructions == null || mn.instructions.size() == 0) {
+            return 0;
+        }
+        if (mn.tryCatchBlocks != null && !mn.tryCatchBlocks.isEmpty()) {
+            return 0;
+        }
+        if (Limits.oversizeMethod(mn)) {
+            return 0;
+        }
+
         int expected = Type.getReturnType(mn.desc).getOpcode(Opcodes.IRETURN);
         int count = 0;
-        for (AbstractInsnNode in : mn.instructions.toArray()) if (in.getOpcode() == expected) count++;
+        for (AbstractInsnNode in : mn.instructions.toArray()) {
+            if (in.getOpcode() == expected) {
+                count++;
+            }
+        }
         return count;
     }
 
@@ -74,17 +98,23 @@ public final class ExceptionReturnTransformer implements Transformer {
         Type ret = Type.getReturnType(mn.desc);
         int returnOpcode = ret.getOpcode(Opcodes.IRETURN);
         int valueLocal = mn.maxLocals;
-        if (ret.getSort() != Type.VOID) mn.maxLocals += ret.getSize();
+        if (ret.getSort() != Type.VOID) {
+            mn.maxLocals += ret.getSize();
+        }
 
         LabelNode exit = new LabelNode();
         LabelNode start = new LabelNode();
         LabelNode end = new LabelNode();
         LabelNode handler = new LabelNode();
+
         for (AbstractInsnNode in : mn.instructions.toArray()) {
-            if (in.getOpcode() != returnOpcode) continue;
+            if (in.getOpcode() != returnOpcode) {
+                continue;
+            }
             InsnList replacement = new InsnList();
-            if (ret.getSort() != Type.VOID)
+            if (ret.getSort() != Type.VOID) {
                 replacement.add(new VarInsnNode(ret.getOpcode(Opcodes.ISTORE), valueLocal));
+            }
             replacement.add(new JumpInsnNode(Opcodes.GOTO, exit));
             mn.instructions.insertBefore(in, replacement);
             mn.instructions.remove(in);
@@ -98,10 +128,14 @@ public final class ExceptionReturnTransformer implements Transformer {
         mn.instructions.add(end);
         mn.instructions.add(handler);
         mn.instructions.add(new InsnNode(Opcodes.POP));
-        if (ret.getSort() != Type.VOID)
+        if (ret.getSort() != Type.VOID) {
             mn.instructions.add(new VarInsnNode(ret.getOpcode(Opcodes.ILOAD), valueLocal));
+        }
         mn.instructions.add(new InsnNode(returnOpcode));
-        if (mn.tryCatchBlocks == null) mn.tryCatchBlocks = new ArrayList<>();
+
+        if (mn.tryCatchBlocks == null) {
+            mn.tryCatchBlocks = new ArrayList<>();
+        }
         mn.tryCatchBlocks.add(new TryCatchBlockNode(start, end, handler, tokenName));
     }
 
@@ -139,6 +173,7 @@ public final class ExceptionReturnTransformer implements Transformer {
         take.instructions.add(new FieldInsnNode(Opcodes.GETSTATIC, name, "t", "L" + name + ";"));
         take.instructions.add(new InsnNode(Opcodes.ARETURN));
         cn.methods.add(take);
+
         return cn;
     }
 

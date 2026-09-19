@@ -2,38 +2,48 @@ package com.nullfuscator.obf.transform;
 
 import com.nullfuscator.obf.core.ObfContext;
 import com.nullfuscator.obf.core.Transformer;
-import org.objectweb.asm.tree.AbstractInsnNode;
-import org.objectweb.asm.tree.ClassNode;
-import org.objectweb.asm.tree.InsnList;
-import org.objectweb.asm.tree.InsnNode;
-import org.objectweb.asm.tree.IntInsnNode;
-import org.objectweb.asm.tree.LdcInsnNode;
-import org.objectweb.asm.tree.MethodNode;
-import org.objectweb.asm.tree.MethodInsnNode;
+import org.objectweb.asm.tree.*;
 
 import static org.objectweb.asm.Opcodes.*;
 
 public final class NumberEncryptionTransformer implements Transformer {
 
-    @Override public String id() { return "numberEncryption"; }
-    @Override public String description() { return "hide numeric constants behind polymorphic runtime math"; }
+    @Override
+    public String id() {
+        return "numberEncryption";
+    }
+
+    @Override
+    public String description() {
+        return "hide numeric constants behind polymorphic runtime math";
+    }
 
     @Override
     public void transform(ObfContext ctx) {
         int touchedClasses = 0;
         int rewritten = 0;
         boolean trackEncodedNumbers = ctx.config().section("antiAI").enabled();
-        int layers = Math.max(2, Math.min(5,
-                ctx.config().section(id()).getInt("layers", 3)));
+        int layers = Math.max(2, Math.min(5, ctx.config().section(id()).getInt("layers", 3)));
 
         for (ClassNode cn : ctx.targets(id())) {
             boolean touched = false;
-            if (com.nullfuscator.obf.core.Limits.hugeClass(cn)) continue;
+            if (com.nullfuscator.obf.core.Limits.hugeClass(cn)) {
+                continue;
+            }
+
             for (MethodNode mn : cn.methods) {
-                if (ctx.isHotPath(cn, mn)) continue;
-                if ((mn.access & (ACC_ABSTRACT | ACC_NATIVE)) != 0) continue;
-                if (mn.instructions == null || mn.instructions.size() == 0) continue;
-                if (com.nullfuscator.obf.core.Limits.oversizeMethod(mn)) continue;
+                if (ctx.isHotPath(cn, mn)) {
+                    continue;
+                }
+                if ((mn.access & (ACC_ABSTRACT | ACC_NATIVE)) != 0) {
+                    continue;
+                }
+                if (mn.instructions == null || mn.instructions.size() == 0) {
+                    continue;
+                }
+                if (com.nullfuscator.obf.core.Limits.oversizeMethod(mn)) {
+                    continue;
+                }
 
                 for (AbstractInsnNode insn : mn.instructions.toArray()) {
                     InsnList repl = null;
@@ -43,7 +53,6 @@ public final class NumberEncryptionTransformer implements Transformer {
                         if (op == BIPUSH || op == SIPUSH) {
                             repl = encodeInt(ctx, ii.operand, layers);
                         }
-
                     } else if (insn instanceof LdcInsnNode ldc) {
                         Object cst = ldc.cst;
                         if (cst instanceof Integer i) {
@@ -74,12 +83,21 @@ public final class NumberEncryptionTransformer implements Transformer {
                         // Check the projected size, not only the input method: one pass
                         // can otherwise expand a near-limit method several times over.
                         if (mn.instructions.size() - 1 + repl.size()
-                                > com.nullfuscator.obf.core.Limits.MAX_GROW_INSNS) break;
-                        if (trackEncodedNumbers) for (AbstractInsnNode encoded : repl) {
-                            if (encoded instanceof LdcInsnNode || encoded instanceof IntInsnNode
-                                    || (encoded.getOpcode() >= ICONST_M1 && encoded.getOpcode() <= DCONST_1))
-                                ctx.markEncodedNumber(encoded);
+                                > com.nullfuscator.obf.core.Limits.MAX_GROW_INSNS) {
+                            break;
                         }
+
+                        if (trackEncodedNumbers) {
+                            for (AbstractInsnNode encoded : repl) {
+                                if (encoded instanceof LdcInsnNode
+                                        || encoded instanceof IntInsnNode
+                                        || (encoded.getOpcode() >= ICONST_M1
+                                            && encoded.getOpcode() <= DCONST_1)) {
+                                    ctx.markEncodedNumber(encoded);
+                                }
+                            }
+                        }
+
                         mn.instructions.insertBefore(insn, repl);
                         mn.instructions.remove(insn);
                         rewritten++;
@@ -87,8 +105,11 @@ public final class NumberEncryptionTransformer implements Transformer {
                     }
                 }
             }
-            if (touched) touchedClasses++;
+            if (touched) {
+                touchedClasses++;
+            }
         }
+
         ctx.log().debug(id() + ": rewrote " + rewritten + " numeric constants across "
                 + touchedClasses + " classes using " + layers + " layers");
     }
@@ -110,6 +131,7 @@ public final class NumberEncryptionTransformer implements Transformer {
         int[] op = new int[layers];
         int[] key = new int[layers];
         int encoded = v;
+
         for (int i = 0; i < layers; i++) {
             op[i] = ctx.random().nextInt(4);
             key[i] = ctx.random().nextInt();
@@ -120,13 +142,23 @@ public final class NumberEncryptionTransformer implements Transformer {
                 default -> -encoded;
             };
         }
+
         InsnList il = new InsnList();
         il.add(pushInt(encoded));
         for (int i = layers - 1; i >= 0; i--) {
             switch (op[i]) {
-                case 0 -> { il.add(pushInt(key[i])); il.add(new InsnNode(IXOR)); }
-                case 1 -> { il.add(pushInt(key[i])); il.add(new InsnNode(IADD)); }
-                case 2 -> { il.add(pushInt(key[i])); il.add(new InsnNode(ISUB)); }
+                case 0 -> {
+                    il.add(pushInt(key[i]));
+                    il.add(new InsnNode(IXOR));
+                }
+                case 1 -> {
+                    il.add(pushInt(key[i]));
+                    il.add(new InsnNode(IADD));
+                }
+                case 2 -> {
+                    il.add(pushInt(key[i]));
+                    il.add(new InsnNode(ISUB));
+                }
                 default -> il.add(new InsnNode(INEG));
             }
         }
@@ -137,6 +169,7 @@ public final class NumberEncryptionTransformer implements Transformer {
         int[] op = new int[layers];
         long[] key = new long[layers];
         long encoded = v;
+
         for (int i = 0; i < layers; i++) {
             op[i] = ctx.random().nextInt(4);
             key[i] = ctx.random().nextLong();
@@ -147,13 +180,23 @@ public final class NumberEncryptionTransformer implements Transformer {
                 default -> -encoded;
             };
         }
+
         InsnList il = new InsnList();
         il.add(pushLong(encoded));
         for (int i = layers - 1; i >= 0; i--) {
             switch (op[i]) {
-                case 0 -> { il.add(pushLong(key[i])); il.add(new InsnNode(LXOR)); }
-                case 1 -> { il.add(pushLong(key[i])); il.add(new InsnNode(LADD)); }
-                case 2 -> { il.add(pushLong(key[i])); il.add(new InsnNode(LSUB)); }
+                case 0 -> {
+                    il.add(pushLong(key[i]));
+                    il.add(new InsnNode(LXOR));
+                }
+                case 1 -> {
+                    il.add(pushLong(key[i]));
+                    il.add(new InsnNode(LADD));
+                }
+                case 2 -> {
+                    il.add(pushLong(key[i]));
+                    il.add(new InsnNode(LSUB));
+                }
                 default -> il.add(new InsnNode(LNEG));
             }
         }
@@ -161,15 +204,25 @@ public final class NumberEncryptionTransformer implements Transformer {
     }
 
     private static AbstractInsnNode pushInt(int v) {
-        if (v >= -1 && v <= 5) return new InsnNode(ICONST_0 + v);
-        if (v >= Byte.MIN_VALUE && v <= Byte.MAX_VALUE) return new IntInsnNode(BIPUSH, v);
-        if (v >= Short.MIN_VALUE && v <= Short.MAX_VALUE) return new IntInsnNode(SIPUSH, v);
+        if (v >= -1 && v <= 5) {
+            return new InsnNode(ICONST_0 + v);
+        }
+        if (v >= Byte.MIN_VALUE && v <= Byte.MAX_VALUE) {
+            return new IntInsnNode(BIPUSH, v);
+        }
+        if (v >= Short.MIN_VALUE && v <= Short.MAX_VALUE) {
+            return new IntInsnNode(SIPUSH, v);
+        }
         return new LdcInsnNode(Integer.valueOf(v));
     }
 
     private static AbstractInsnNode pushLong(long v) {
-        if (v == 0L) return new InsnNode(LCONST_0);
-        if (v == 1L) return new InsnNode(LCONST_1);
+        if (v == 0L) {
+            return new InsnNode(LCONST_0);
+        }
+        if (v == 1L) {
+            return new InsnNode(LCONST_1);
+        }
         return new LdcInsnNode(Long.valueOf(v));
     }
 }

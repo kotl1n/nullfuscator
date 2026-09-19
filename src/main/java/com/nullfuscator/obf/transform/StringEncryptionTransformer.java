@@ -5,22 +5,7 @@ import com.nullfuscator.obf.core.Transformer;
 import org.objectweb.asm.ConstantDynamic;
 import org.objectweb.asm.Handle;
 import org.objectweb.asm.Type;
-import org.objectweb.asm.tree.AbstractInsnNode;
-import org.objectweb.asm.tree.ClassNode;
-import org.objectweb.asm.tree.FieldInsnNode;
-import org.objectweb.asm.tree.FieldNode;
-import org.objectweb.asm.tree.IincInsnNode;
-import org.objectweb.asm.tree.InsnList;
-import org.objectweb.asm.tree.InsnNode;
-import org.objectweb.asm.tree.IntInsnNode;
-import org.objectweb.asm.tree.InvokeDynamicInsnNode;
-import org.objectweb.asm.tree.JumpInsnNode;
-import org.objectweb.asm.tree.LabelNode;
-import org.objectweb.asm.tree.LdcInsnNode;
-import org.objectweb.asm.tree.MethodInsnNode;
-import org.objectweb.asm.tree.MethodNode;
-import org.objectweb.asm.tree.TypeInsnNode;
-import org.objectweb.asm.tree.VarInsnNode;
+import org.objectweb.asm.tree.*;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -36,13 +21,26 @@ public final class StringEncryptionTransformer implements Transformer {
     // A UTF-16 code unit takes at most three bytes in class-file modified UTF-8.
     private static final int CIPHER_CHUNK_CHARS = 65535 / 3;
 
-    @Override public String id() { return "stringEncryption"; }
-    @Override public String description() { return "encrypt string constants with per-site rolling XOR keys"; }
+    private static final String SCF = "java/lang/invoke/StringConcatFactory";
+
+    private static final char TAG_ARG = 1;
+    private static final char TAG_CONST = 2;
+
+    @Override
+    public String id() {
+        return "stringEncryption";
+    }
+
+    @Override
+    public String description() {
+        return "encrypt string constants with per-site rolling XOR keys";
+    }
 
     @Override
     public void transform(ObfContext ctx) {
         boolean polymorphic = "POLYMORPHIC".equalsIgnoreCase(
                 ctx.config().section(id()).getString("type", "STANDARD"));
+
         int touchedClasses = 0;
         int encrypted = 0;
         int concats = 0;
@@ -51,21 +49,38 @@ public final class StringEncryptionTransformer implements Transformer {
         int cachedConstants = 0;
 
         for (ClassNode cn : ctx.targets(id())) {
-            if (ctx.isHotClass(cn)) continue;
-            boolean isInterface = (cn.access & ACC_INTERFACE) != 0;
+            if (ctx.isHotClass(cn)) {
+                continue;
+            }
 
+            boolean isInterface = (cn.access & ACC_INTERFACE) != 0;
             int majorVersion = cn.version & 0xFFFF;
-            if (isInterface && majorVersion < V1_8) continue;
+            if (isInterface && majorVersion < V1_8) {
+                continue;
+            }
+
             boolean cacheConstants = majorVersion >= V11;
-            if (com.nullfuscator.obf.core.Limits.hugeClass(cn)) continue;
+            if (com.nullfuscator.obf.core.Limits.hugeClass(cn)) {
+                continue;
+            }
 
             List<Hit> hits = new ArrayList<>();
             List<ConcatHit> concatHits = new ArrayList<>();
+
             for (MethodNode mn : cn.methods) {
-                if (ctx.isHotPath(cn, mn)) continue;
-                if ((mn.access & (ACC_ABSTRACT | ACC_NATIVE)) != 0) continue;
-                if (mn.instructions == null || mn.instructions.size() == 0) continue;
-                if (com.nullfuscator.obf.core.Limits.oversizeMethod(mn)) continue;
+                if (ctx.isHotPath(cn, mn)) {
+                    continue;
+                }
+                if ((mn.access & (ACC_ABSTRACT | ACC_NATIVE)) != 0) {
+                    continue;
+                }
+                if (mn.instructions == null || mn.instructions.size() == 0) {
+                    continue;
+                }
+                if (com.nullfuscator.obf.core.Limits.oversizeMethod(mn)) {
+                    continue;
+                }
+
                 for (AbstractInsnNode insn : mn.instructions.toArray()) {
                     if (insn instanceof LdcInsnNode ldc && ldc.cst instanceof String) {
                         hits.add(new Hit(mn, ldc));
@@ -74,11 +89,16 @@ public final class StringEncryptionTransformer implements Transformer {
                     }
                 }
             }
+
             boolean hasFieldConstants = cn.fields.stream().anyMatch(f -> f.value instanceof String);
-            if (hits.isEmpty() && concatHits.isEmpty() && !hasFieldConstants) continue;
+            if (hits.isEmpty() && concatHits.isEmpty() && !hasFieldConstants) {
+                continue;
+            }
 
             // Input methods may already use the same alphabet as generated helpers.
-            for (MethodNode method : cn.methods) ctx.names().reserve(method.name);
+            for (MethodNode method : cn.methods) {
+                ctx.names().reserve(method.name);
+            }
 
             Random rnd = ctx.random();
             int familyCount = polymorphic ? 4 : 1;
@@ -86,15 +106,19 @@ public final class StringEncryptionTransformer implements Transformer {
             String[] decoderNames = new String[familyCount];
             String[] bootstrapNames = new String[familyCount];
             List<MethodNode> familyMethods = new ArrayList<>();
+
             for (int family = 0; family < familyCount; family++) {
                 int charMul = rnd.nextInt() | 1;
                 families[family] = new CipherFamily(family, rnd.nextInt() | 1,
                         rnd.nextInt(), charMul, inverse16(charMul));
                 decoderNames[family] = ctx.names().next();
+
                 MethodNode decoder = buildDecoder(decoderNames[family], families[family]);
-                if (isInterface && majorVersion == V1_8)
+                if (isInterface && majorVersion == V1_8) {
                     decoder.access = (decoder.access & ~ACC_PRIVATE) | ACC_PUBLIC;
+                }
                 familyMethods.add(decoder);
+
                 if (cacheConstants) {
                     bootstrapNames[family] = ctx.names().next();
                     familyMethods.add(buildCondyBootstrap(bootstrapNames[family],
@@ -110,8 +134,10 @@ public final class StringEncryptionTransformer implements Transformer {
                 CipherFamily family = families[familyIndex];
                 String plain = (String) hit.ldc.cst;
                 String cipher = crypt(plain, key, family);
+
                 InsnList repl = new InsnList();
                 ObfContext.StringStateBinding binding = ctx.stringState(hit.ldc);
+
                 if (binding != null) {
                     pushCipher(repl, cipher);
                     pushSplitKey(repl, key, rnd);
@@ -126,6 +152,7 @@ public final class StringEncryptionTransformer implements Transformer {
                     pushEncrypted(repl, cn.name, decoderNames[familyIndex], bootstrapNames[familyIndex],
                             cipher, key, rnd, isInterface, condyOrdinal);
                 }
+
                 hit.mn.instructions.insertBefore(hit.ldc, repl);
                 hit.mn.instructions.remove(hit.ldc);
                 encrypted++;
@@ -134,16 +161,22 @@ public final class StringEncryptionTransformer implements Transformer {
             for (ConcatHit ch : concatHits) {
                 InsnList repl = desugarConcat(ch.mn, ch.indy, cn.name, decoderNames, bootstrapNames,
                         families, rnd, isInterface, condyOrdinal);
-                if (repl == null) continue;
+                if (repl == null) {
+                    continue;
+                }
                 ch.mn.instructions.insertBefore(ch.indy, repl);
                 ch.mn.instructions.remove(ch.indy);
                 concats++;
             }
+
             cachedConstants += condyOrdinal[0];
 
             if (cn.fields != null) {
                 for (FieldNode fn : cn.fields) {
-                    if (!(fn.value instanceof String s)) continue;
+                    if (!(fn.value instanceof String s)) {
+                        continue;
+                    }
+
                     if ((fn.access & ACC_STATIC) != 0) {
                         MethodNode clinit = findOrCreateClinit(cn);
                         if (clinit == null || com.nullfuscator.obf.core.Limits.oversizeMethod(clinit)) {
@@ -152,6 +185,7 @@ public final class StringEncryptionTransformer implements Transformer {
                         int key = rnd.nextInt();
                         int familyIndex = rnd.nextInt(familyCount);
                         CipherFamily family = families[familyIndex];
+
                         InsnList init = new InsnList();
                         pushCipher(init, crypt(s, key, family));
                         pushSplitKey(init, key, rnd);
@@ -164,22 +198,34 @@ public final class StringEncryptionTransformer implements Transformer {
                     constValues++;
                 }
             }
+
             java.util.Set<String> used = new java.util.HashSet<>();
             for (MethodNode method : cn.methods) {
                 for (AbstractInsnNode insn : method.instructions) {
-                    if (insn instanceof MethodInsnNode call && call.owner.equals(cn.name))
+                    if (insn instanceof MethodInsnNode call && call.owner.equals(cn.name)) {
                         used.add(call.name);
+                    }
                     if (insn instanceof LdcInsnNode ldc && ldc.cst instanceof ConstantDynamic constant
-                            && constant.getBootstrapMethod().getOwner().equals(cn.name))
+                            && constant.getBootstrapMethod().getOwner().equals(cn.name)) {
                         used.add(constant.getBootstrapMethod().getName());
+                    }
                 }
             }
-            for (int family = 0; family < familyCount; family++)
-                if (used.contains(bootstrapNames[family])) used.add(decoderNames[family]);
-            for (MethodNode method : familyMethods)
-                if (used.contains(method.name)) cn.methods.add(method);
+
+            for (int family = 0; family < familyCount; family++) {
+                if (used.contains(bootstrapNames[family])) {
+                    used.add(decoderNames[family]);
+                }
+            }
+
+            for (MethodNode method : familyMethods) {
+                if (used.contains(method.name)) {
+                    cn.methods.add(method);
+                }
+            }
             touchedClasses++;
         }
+
         ctx.log().pass(id(), "encrypted " + encrypted + " strings + " + concats
                 + " concatenations + " + constValues + " field constants across "
                 + touchedClasses + " classes, " + stateBound + " state-bound ("
@@ -189,7 +235,9 @@ public final class StringEncryptionTransformer implements Transformer {
 
     private static MethodNode findOrCreateClinit(ClassNode cn) {
         for (MethodNode m : cn.methods) {
-            if (m.name.equals("<clinit>") && m.desc.equals("()V")) return m;
+            if (m.name.equals("<clinit>") && m.desc.equals("()V")) {
+                return m;
+            }
         }
         MethodNode clinit = new MethodNode(ASM9, ACC_STATIC, "<clinit>", "()V", null, null);
         clinit.instructions = new InsnList();
@@ -198,20 +246,29 @@ public final class StringEncryptionTransformer implements Transformer {
         return clinit;
     }
 
-    private static final String SCF = "java/lang/invoke/StringConcatFactory";
-
-    private static final char TAG_ARG = 1, TAG_CONST = 2;
-
     private static boolean isEncryptableConcat(InvokeDynamicInsnNode indy) {
         if (indy.bsm == null || !SCF.equals(indy.bsm.getOwner())
-                || !"makeConcatWithConstants".equals(indy.bsm.getName())) return false;
+                || !"makeConcatWithConstants".equals(indy.bsm.getName())) {
+            return false;
+        }
+
         Object[] a = indy.bsmArgs;
-        if (a.length < 1 || !(a[0] instanceof String recipe)) return false;
-        for (int i = 1; i < a.length; i++) if (!(a[i] instanceof String)) return false;
+        if (a.length < 1 || !(a[0] instanceof String recipe)) {
+            return false;
+        }
+        for (int i = 1; i < a.length; i++) {
+            if (!(a[i] instanceof String)) {
+                return false;
+            }
+        }
+
         boolean hasLiteral = false;
         for (int i = 0; i < recipe.length(); i++) {
             char c = recipe.charAt(i);
-            if (c != TAG_ARG && c != TAG_CONST) { hasLiteral = true; break; }
+            if (c != TAG_ARG && c != TAG_CONST) {
+                hasLiteral = true;
+                break;
+            }
         }
         return hasLiteral || a.length > 1;
     }
@@ -223,7 +280,10 @@ public final class StringEncryptionTransformer implements Transformer {
         Type[] args = Type.getArgumentTypes(indy.desc);
         int[] slot = new int[args.length];
         int cur = mn.maxLocals;
-        for (int i = 0; i < args.length; i++) { slot[i] = cur; cur += args[i].getSize(); }
+        for (int i = 0; i < args.length; i++) {
+            slot[i] = cur;
+            cur += args[i].getSize();
+        }
         mn.maxLocals = Math.max(mn.maxLocals, cur);
 
         InsnList il = new InsnList();
@@ -236,8 +296,10 @@ public final class StringEncryptionTransformer implements Transformer {
         il.add(new MethodInsnNode(INVOKESPECIAL, "java/lang/StringBuilder", "<init>", "()V", false));
 
         String recipe = (String) indy.bsmArgs[0];
-        int argCursor = 0, constCursor = 1;
+        int argCursor = 0;
+        int constCursor = 1;
         StringBuilder lit = new StringBuilder();
+
         for (int p = 0; p < recipe.length(); p++) {
             char c = recipe.charAt(p);
             if (c == TAG_ARG || c == TAG_CONST) {
@@ -257,6 +319,7 @@ public final class StringEncryptionTransformer implements Transformer {
                 lit.append(c);
             }
         }
+
         flushLiteral(il, lit, owner, decoderNames, bootstrapNames, families, rnd, itf, condyOrdinal);
         il.add(new MethodInsnNode(INVOKEVIRTUAL, "java/lang/StringBuilder",
                 "toString", "()Ljava/lang/String;", false));
@@ -266,7 +329,9 @@ public final class StringEncryptionTransformer implements Transformer {
     private void flushLiteral(InsnList il, StringBuilder lit, String owner,
                               String[] decoderNames, String[] bootstrapNames, CipherFamily[] families,
                               Random rnd, boolean itf, int[] condyOrdinal) {
-        if (lit.length() == 0) return;
+        if (lit.length() == 0) {
+            return;
+        }
         encryptedAppend(il, lit.toString(), owner, decoderNames, bootstrapNames, families, rnd, itf,
                 condyOrdinal);
         lit.setLength(0);
@@ -286,12 +351,12 @@ public final class StringEncryptionTransformer implements Transformer {
     private static MethodInsnNode appendCall(Type t) {
         String desc = switch (t.getSort()) {
             case Type.BOOLEAN -> "(Z)Ljava/lang/StringBuilder;";
-            case Type.CHAR    -> "(C)Ljava/lang/StringBuilder;";
+            case Type.CHAR -> "(C)Ljava/lang/StringBuilder;";
             case Type.BYTE, Type.SHORT, Type.INT -> "(I)Ljava/lang/StringBuilder;";
-            case Type.LONG    -> "(J)Ljava/lang/StringBuilder;";
-            case Type.FLOAT   -> "(F)Ljava/lang/StringBuilder;";
-            case Type.DOUBLE  -> "(D)Ljava/lang/StringBuilder;";
-            default           -> "(Ljava/lang/Object;)Ljava/lang/StringBuilder;";
+            case Type.LONG -> "(J)Ljava/lang/StringBuilder;";
+            case Type.FLOAT -> "(F)Ljava/lang/StringBuilder;";
+            case Type.DOUBLE -> "(D)Ljava/lang/StringBuilder;";
+            default -> "(Ljava/lang/Object;)Ljava/lang/StringBuilder;";
         };
         return new MethodInsnNode(INVOKEVIRTUAL, "java/lang/StringBuilder", "append", desc, false);
     }
@@ -303,12 +368,14 @@ public final class StringEncryptionTransformer implements Transformer {
             int low = k & 0xFFFF;
             int high = (k >>> 16) & 0xFFFF;
             int value = c[i];
+
             value = switch (family.mode) {
                 case 1 -> ((value ^ low) + high) & 0xFFFF;
                 case 2 -> rotateLeft16(value ^ low, ((k >>> 27) & 15) + 1);
                 case 3 -> (((value ^ low) * family.charMul) + high) & 0xFFFF;
                 default -> value ^ low;
             };
+
             c[i] = (char) value;
             k = Integer.rotateLeft(k ^ value, 5) * family.rollMul + family.rollAdd;
         }
@@ -341,7 +408,6 @@ public final class StringEncryptionTransformer implements Transformer {
         il.add(new JumpInsnNode(IF_ICMPGE, end));
 
         if (family.mode == 2) {
-
             il.add(new VarInsnNode(ILOAD, 3));
             il.add(pushInt(27));
             il.add(new InsnNode(IUSHR));
@@ -380,9 +446,10 @@ public final class StringEncryptionTransformer implements Transformer {
         il.add(end);
 
         il.add(new VarInsnNode(ALOAD, 2));
-        il.add(new MethodInsnNode(INVOKESTATIC, "java/lang/String", "valueOf", "([C)Ljava/lang/String;", false));
-
-        il.add(new MethodInsnNode(INVOKEVIRTUAL, "java/lang/String", "intern", "()Ljava/lang/String;", false));
+        il.add(new MethodInsnNode(INVOKESTATIC, "java/lang/String", "valueOf",
+                "([C)Ljava/lang/String;", false));
+        il.add(new MethodInsnNode(INVOKEVIRTUAL, "java/lang/String", "intern",
+                "()Ljava/lang/String;", false));
         il.add(new InsnNode(ARETURN));
 
         dec.instructions = il;
@@ -394,6 +461,7 @@ public final class StringEncryptionTransformer implements Transformer {
         MethodNode bootstrap = new MethodNode(ASM9,
                 ACC_PRIVATE | ACC_STATIC | ACC_SYNTHETIC | ACC_VARARGS,
                 name, CONDY_BSM_DESC, null, new String[] { "java/lang/Throwable" });
+
         InsnList il = bootstrap.instructions;
         il.add(new LdcInsnNode(""));
         il.add(new VarInsnNode(ALOAD, 5));
@@ -413,11 +481,15 @@ public final class StringEncryptionTransformer implements Transformer {
         int mask = rnd.nextInt();
         Handle bootstrap = new Handle(H_INVOKESTATIC, owner, bootstrapName,
                 CONDY_BSM_DESC, itf);
+
         List<String> chunks = cipherChunks(cipher);
         Object[] arguments = new Object[chunks.size() + 2];
         arguments[0] = key ^ mask;
         arguments[1] = mask;
-        for (int i = 0; i < chunks.size(); i++) arguments[i + 2] = chunks.get(i);
+        for (int i = 0; i < chunks.size(); i++) {
+            arguments[i + 2] = chunks.get(i);
+        }
+
         ConstantDynamic constant = new ConstantDynamic("s$" + ordinal,
                 "Ljava/lang/String;", bootstrap, arguments);
         return new LdcInsnNode(constant);
@@ -425,9 +497,12 @@ public final class StringEncryptionTransformer implements Transformer {
 
     private static List<String> cipherChunks(String cipher) {
         List<String> chunks = new ArrayList<>();
-        for (int start = 0; start < cipher.length(); start += CIPHER_CHUNK_CHARS)
+        for (int start = 0; start < cipher.length(); start += CIPHER_CHUNK_CHARS) {
             chunks.add(cipher.substring(start, Math.min(cipher.length(), start + CIPHER_CHUNK_CHARS)));
-        if (chunks.isEmpty()) chunks.add("");
+        }
+        if (chunks.isEmpty()) {
+            chunks.add("");
+        }
         return chunks;
     }
 
@@ -437,6 +512,7 @@ public final class StringEncryptionTransformer implements Transformer {
             il.add(new LdcInsnNode(chunks.get(0)));
             return;
         }
+
         il.add(new TypeInsnNode(NEW, "java/lang/StringBuilder"));
         il.add(new InsnNode(DUP));
         il.add(new MethodInsnNode(INVOKESPECIAL, "java/lang/StringBuilder", "<init>", "()V", false));
@@ -474,7 +550,6 @@ public final class StringEncryptionTransformer implements Transformer {
                 pushLowKeyXor(il);
             }
             case 2 -> {
-
                 il.add(new VarInsnNode(ISTORE, 6));
                 il.add(new VarInsnNode(ILOAD, 6));
                 il.add(new VarInsnNode(ILOAD, 5));
@@ -514,9 +589,15 @@ public final class StringEncryptionTransformer implements Transformer {
     }
 
     private static AbstractInsnNode pushInt(int v) {
-        if (v >= -1 && v <= 5) return new InsnNode(ICONST_0 + v);
-        if (v >= Byte.MIN_VALUE && v <= Byte.MAX_VALUE) return new IntInsnNode(BIPUSH, v);
-        if (v >= Short.MIN_VALUE && v <= Short.MAX_VALUE) return new IntInsnNode(SIPUSH, v);
+        if (v >= -1 && v <= 5) {
+            return new InsnNode(ICONST_0 + v);
+        }
+        if (v >= Byte.MIN_VALUE && v <= Byte.MAX_VALUE) {
+            return new IntInsnNode(BIPUSH, v);
+        }
+        if (v >= Short.MIN_VALUE && v <= Short.MAX_VALUE) {
+            return new IntInsnNode(SIPUSH, v);
+        }
         return new LdcInsnNode(Integer.valueOf(v));
     }
 
@@ -541,8 +622,13 @@ public final class StringEncryptionTransformer implements Transformer {
         return x & 0xFFFF;
     }
 
-    private record Hit(MethodNode mn, LdcInsnNode ldc) { }
-    private record ConcatHit(MethodNode mn, InvokeDynamicInsnNode indy) { }
+    private record Hit(MethodNode mn, LdcInsnNode ldc) {
+    }
+
+    private record ConcatHit(MethodNode mn, InvokeDynamicInsnNode indy) {
+    }
+
     private record CipherFamily(int mode, int rollMul, int rollAdd,
-                                int charMul, int charInverse) { }
+                                int charMul, int charInverse) {
+    }
 }

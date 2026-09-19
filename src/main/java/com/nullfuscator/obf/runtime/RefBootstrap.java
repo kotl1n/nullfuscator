@@ -8,9 +8,11 @@ import java.lang.invoke.MethodType;
 
 public final class RefBootstrap {
 
-    private RefBootstrap() {}
-
     private static final char SEP = 1;
+
+    private RefBootstrap() {
+    }
+
     public static CallSite bootstrap(MethodHandles.Lookup caller, String name,
                                      MethodType type, String enc, int keyA, int keyB,
                                      int mul, int add, int nonce) throws Throwable {
@@ -18,6 +20,7 @@ public final class RefBootstrap {
         int key = mix(keyA, keyB, name.hashCode(), callerName.hashCode(),
                 type.toMethodDescriptorString().hashCode(), nonce);
         String dec = crypt(enc, key, mul, add, nonce);
+
         char kind = dec.charAt(0);
         int p1 = dec.indexOf(SEP, 1);
         int p2 = dec.indexOf(SEP, p1 + 1);
@@ -26,8 +29,7 @@ public final class RefBootstrap {
 
         ClassLoader ld = caller.lookupClass().getClassLoader();
         Class<?> oc = Class.forName(owner.replace('/', '.'), false, ld);
-        // The JVM already resolved the target descriptor in the indy MethodType.
-        // Instance sites prepend exactly one receiver parameter.
+
         MethodType mt = kind == '0' ? type : type.dropParameterTypes(0, 1);
 
         MethodHandle mh;
@@ -41,9 +43,17 @@ public final class RefBootstrap {
         return new ConstantCallSite(mh.asType(type));
     }
 
-    private static int embeddedSecret() { return 0x13579BDF; }
-    private static int embeddedSecret2() { return 0x2468ACE1; }
-    private static int embeddedMode() { return 0x10203047; }
+    private static int embeddedSecret() {
+        return 0x13579BDF;
+    }
+
+    private static int embeddedSecret2() {
+        return 0x2468ACE1;
+    }
+
+    private static int embeddedMode() {
+        return 0x10203047;
+    }
 
     private static int mix(int a, int b, int n, int c, int t, int nonce) {
         int h = embeddedSecret() ^ Integer.rotateLeft(embeddedSecret2(), embeddedMode() & 31);
@@ -59,6 +69,7 @@ public final class RefBootstrap {
         char[] c = s.toCharArray();
         int k = key;
         int mode = embeddedMode() & 7;
+
         for (int i = 0; i < c.length; i++) {
             int lo = k & 255;
             int hi = (k >>> 16) & 255;
@@ -71,14 +82,15 @@ public final class RefBootstrap {
             c[i] = (char) (v ^ lo);
             k = nextState(k, mul, add, mode, i);
         }
-        // Decode code units in place, retaining supplementary and isolated surrogates.
+
         int length = 0;
-        for (int i = 0; i < c.length;) {
+        for (int i = 0; i < c.length; ) {
             int first = c[i++];
-            if (first < 0x80) c[length++] = (char) first;
-            else if (first < 0xe0)
+            if (first < 0x80) {
+                c[length++] = (char) first;
+            } else if (first < 0xe0) {
                 c[length++] = (char) (((first & 31) << 6) | (c[i++] & 63));
-            else {
+            } else {
                 int second = c[i++] & 63;
                 c[length++] = (char) (((first & 15) << 12) | (second << 6) | (c[i++] & 63));
             }
