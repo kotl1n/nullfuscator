@@ -10,6 +10,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.HashSet;
 
 public final class FieldPackingTransformer implements Transformer {
 
@@ -28,6 +30,36 @@ public final class FieldPackingTransformer implements Transformer {
         int minFields = Math.max(1, ctx.config().section(id()).getInt("minFields", 1));
         Map<String, Slot> slots = new HashMap<>();
         List<Packed> packed = new ArrayList<>();
+        Set<String> retained = new HashSet<>();
+        for (ClassNode cn : ctx.classes()) {
+            for (MethodNode mn : cn.methods) {
+                boolean initialized = !mn.name.equals("<init>");
+                for (AbstractInsnNode insn : mn.instructions) {
+                    if (insn instanceof MethodInsnNode call
+                            && call.getOpcode() == Opcodes.INVOKESPECIAL
+                            && call.name.equals("<init>") && call.owner.equals(cn.superName)
+                            && call.desc.equals("()V") && receiverIsThis(call)) {
+                        initialized = true;
+                    }
+                    if (insn instanceof FieldInsnNode field) {
+                        String owner = field.owner;
+                        Set<String> seen = new HashSet<>();
+                        while (owner != null && seen.add(owner)) {
+                            ClassNode declaration = ctx.getClass(owner);
+                            if (declaration == null) break;
+                            if (declaration.fields.stream().anyMatch(candidate ->
+                                    candidate.name.equals(field.name) && candidate.desc.equals(field.desc))) {
+                                if (!initialized || !owner.equals(cn.name)) {
+                                    retained.add(key(owner, field.name, field.desc));
+                                }
+                                break;
+                            }
+                            owner = declaration.superName;
+                        }
+                    }
+                }
+            }
+        }
 
         for (ClassNode cn : ctx.targets(id())) {
             if (ctx.isHotClass(cn)) {
@@ -39,7 +71,8 @@ public final class FieldPackingTransformer implements Transformer {
 
             List<FieldNode> fields = new ArrayList<>();
             for (FieldNode fn : cn.fields) {
-                if ((fn.access & Opcodes.ACC_STATIC) == 0) {
+                if ((fn.access & (Opcodes.ACC_STATIC | Opcodes.ACC_SYNTHETIC)) == 0
+                        && !retained.contains(key(cn.name, fn.name, fn.desc))) {
                     fields.add(fn);
                 }
             }

@@ -30,6 +30,14 @@ public final class MethodExtractionTransformer implements Transformer {
 
     @Override
     public void transform(ObfContext ctx) {
+        try (RelocationAccess access = new RelocationAccess(ctx)) {
+            transform(ctx, access);
+        } catch (java.io.IOException e) {
+            throw new java.io.UncheckedIOException(e);
+        }
+    }
+
+    private void transform(ObfContext ctx, RelocationAccess access) {
         var sec = ctx.config().section(id());
         int percent = clamp(sec.getInt("percent", 100), 0, 100);
         int maxMethods = Math.max(1, sec.getInt("maxMethods", 128));
@@ -69,7 +77,8 @@ public final class MethodExtractionTransformer implements Transformer {
                 if (ctx.isHotPath(owner, mn)) {
                     continue;
                 }
-                if (!eligible(owner, mn, minInstructions, subclassed) || rnd.nextInt(100) >= percent) {
+                if (!eligible(owner, mn, minInstructions, subclassed)
+                        || !access.canMove(owner, mn) || rnd.nextInt(100) >= percent) {
                     continue;
                 }
 

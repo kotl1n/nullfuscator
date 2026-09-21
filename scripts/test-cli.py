@@ -80,7 +80,7 @@ with tempfile.TemporaryDirectory(prefix='nullfuscator-cli-') as temp:
         result = run(*args)
         assert result.returncode == 2 and 'Exception' not in result.stderr, result.stderr
     assert run('--help').returncode == 0 and '--lib' in run('--help').stdout
-    assert run('--version').returncode == 0 and '0.2.3-beta' in run('--version').stdout
+    assert run('--version').returncode == 0 and '0.2.4' in run('--version').stdout
     short_out = work / 'short_out.jar'
     result = run('-i', original, '-o', short_out, '-p', 'balanced', '-s', '42', '-v')
     assert result.returncode == 0 and short_out.is_file(), result.stderr
@@ -97,8 +97,62 @@ with tempfile.TemporaryDirectory(prefix='nullfuscator-cli-') as temp:
     default_target = work / 'mytest.jar'
     default_target.write_bytes(original.read_bytes())
     expected_default_out = work / 'mytest-obf.jar'
-    result = run(default_target, '-p', 'light')
+    result = run(default_target, '--seed', '19')
     assert result.returncode == 0 and expected_default_out.is_file(), result.stderr
+    explicit_light = work / 'explicit-light.jar'
+    result = run(default_target, explicit_light, '-p', 'light', '--seed', '19')
+    assert result.returncode == 0, result.stderr
+    assert expected_default_out.read_bytes() == explicit_light.read_bytes()
+    assert Path(str(expected_default_out) + '.map').exists()
+
+    for seed in ('-42', '-9223372036854775808'):
+        result = run(default_target, explicit_light, '--seed', seed, '--quiet', '--verbose')
+        assert result.returncode == 0 and result.stderr == '', result.stderr
+        negative_bytes = explicit_light.read_bytes()
+        result = run(default_target, explicit_light, '--seed=' + seed)
+        assert result.returncode == 0 and explicit_light.read_bytes() == negative_bytes, result.stderr
+
+    for setting in ('classRenamer { enabled:true, exempt:"class{.*}" }',
+                    'defaults.exempt = "class{.*}"', 'libs = "missing.jar"',
+                    'classRenamer { enabled:true, chars:"x" }', 'libs = null',
+                    'defaults.exempt = null', 'classRenamer { enabled:true, exempt:null }'):
+        bad_config = work / 'invalid.hocon'
+        bad_config.write_text(setting)
+        before = explicit_light.read_bytes()
+        result = run(default_target, explicit_light, '-c', bad_config, '--quiet')
+        assert result.returncode == 2 and 'list of strings' in result.stderr, result.stderr
+        assert explicit_light.read_bytes() == before
+
+    before = explicit_light.read_bytes()
+    result = run(default_target, explicit_light, '-p', 'light', '-s', '19', '--dry-run')
+    assert result.returncode == 0, result.stderr
+    assert explicit_light.read_bytes() == before
+    measured = json.loads(result.stdout)['outputJarBytes']
+    result = run(default_target, explicit_light, '-p', 'light', '-s', '19')
+    assert result.returncode == 0 and measured == explicit_light.stat().st_size, result.stderr
+
+    retrace_map = work / 'retrace-regression.map'
+    retrace_map.write_text('example.Main -> a:\n    void run() -> b\n'
+                           '    int field -> b\n'
+                           'original.Other -> example.Main:\n'
+                           'example.Unicode -> пример.Класс:\n    void метод() -> х\n',
+                           encoding='utf-8')
+    trace = ('java.lang.RuntimeException: bad data a\n'
+             '\tat a.b(Main.java:3)\n'
+             '\tat app/module@1/a.b(Main.java:3)\n'
+             'Caused by: a: a message stays a\n'
+             '\tSuppressed: пример.Класс: пример.Класс\n'
+             '\tat пример.Класс.х(Unknown Source)\n'
+             'Exception in thread "main" a: bad data\n')
+    expected_trace = ('java.lang.RuntimeException: bad data a\n'
+                      '\tat example.Main.run(Main.java:3)\n'
+                      '\tat app/module@1/example.Main.run(Main.java:3)\n'
+                      'Caused by: example.Main: a message stays a\n'
+                      '\tSuppressed: example.Unicode: пример.Класс\n'
+                      '\tat example.Unicode.метод(Unknown Source)\n'
+                      'Exception in thread "main" example.Main: bad data\n')
+    result = run('retrace', retrace_map, stdin=trace)
+    assert result.returncode == 0 and result.stdout == expected_trace, result.stdout + result.stderr
 
     assert run('presets').returncode == 0 and 'balanced' in run('presets').stdout
     init_file = work / 'exported-config.hocon'

@@ -11,6 +11,7 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 subprocess.run(["python3", str(ROOT / "scripts/build.py")], check=True)
 subprocess.run(["python3", str(ROOT / "scripts/test-enums.py")], check=True)
+subprocess.run(["python3", str(ROOT / "scripts/test-compatibility.py")], check=True)
 with tempfile.TemporaryDirectory(prefix="growth-regression-") as temp:
     jar = ROOT / "build/nullfuscator-obf.jar"
     subprocess.run(["javac", "--release", "17", "-cp", str(jar), "-d", temp,
@@ -147,7 +148,7 @@ hotPaths.exclude = ["method{^Smoke#value\\(I\\)I$}"]
     subprocess.run(["java", "-jar", str(jar), "--input", str(original), "--report-only",
                     "--config", str(ROOT / "config/light.hocon"), "--report", str(report_only),
                     "--seed", "1"], check=True, stdout=subprocess.DEVNULL)
-    assert not absent.exists() and json.loads(report_only.read_text())["outputJarBytes"] == -1
+    assert not absent.exists() and json.loads(report_only.read_text())["outputJarBytes"] > 0
     print("PASS report-only creates no transformed artifact")
 
     # Multi-release class overrides fail safely when class renaming is requested.

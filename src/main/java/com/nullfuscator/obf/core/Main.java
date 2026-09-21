@@ -124,7 +124,7 @@ public final class Main {
                     case "--report-only", "--dry-run" -> reportOnly = true;
                     case "--no-mapping", "-M" -> noMapping = true;
                     case "--seed", "-s" -> {
-                        String s = (val != null ? val : value(args, ++i));
+                        String s = (val != null ? val : seedValue(args, ++i));
                         try {
                             seed = Long.parseLong(s);
                         } catch (NumberFormatException e) {
@@ -199,11 +199,11 @@ public final class Main {
         } else if (presetArg != null) {
             cfg = ObfConfig.loadPreset(presetArg);
         } else {
-            cfg = ObfConfig.empty();
+            cfg = ObfConfig.loadPreset("light");
         }
         cfg = cfg.withAdditionalLibs(additionalLibs);
 
-        ObfLog log = new ObfLog(verbose);
+        ObfLog log = new ObfLog(verbose, quiet);
         File mapFile = noMapping || reportOnly ? null
                 : mapping != null ? mapping : new File(output.getPath() + ".map");
 
@@ -248,6 +248,7 @@ public final class Main {
                             formatBytes(inputBytes), formatBytes(outBytes), sign, pct, ctx.classes().size());
                 }
             } else {
+                JarIO.verify(ctx);
                 log.info("report-only: output and mapping were not written");
             }
         } catch (Exception e) {
@@ -284,6 +285,13 @@ public final class Main {
             throw new IllegalArgumentException("missing value for " + args[index - 1]);
         }
         return args[index];
+    }
+
+    private static String seedValue(String[] args, int index) {
+        if (index < args.length && args[index].matches("-[0-9]+")) {
+            return args[index];
+        }
+        return value(args, index);
     }
 
     private static final List<String> KNOWN_FLAGS = List.of(
@@ -448,7 +456,7 @@ public final class Main {
                 PRIMARY OPTIONS:
                   -i, --input <path>         Input JAR file (or 1st positional argument)
                   -o, --output <path>        Output JAR destination (default: <input>-obf.jar)
-                  -p, --preset <name>        Built-in preset: light, balanced, strong, full
+                  -p, --preset <name>        Built-in preset: light (default), balanced, strong, full
                   -c, --config <path>        Custom HOCON configuration profile or preset name
                   -l, --lib <path>           External library JAR for hierarchy analysis (repeatable)
                   -s, --seed <long>          Deterministic seed for reproducible builds (default: random)
@@ -457,7 +465,7 @@ public final class Main {
                   -m, --mapping <path>       ProGuard-compatible mapping output (default: <output>.map)
                   -M, --no-mapping           Disable mapping output
                   -r, --report <path>        JSON execution report destination (schema v1)
-                      --dry-run              Analyze & run transforms in memory without writing JAR
+                      --dry-run              Transform and serialize in memory, checking archive budgets
                       --report-only          Alias for --dry-run (JSON emitted to stdout unless -r set)
 
                 OUTPUT & DIAGNOSTICS:

@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/kotl1n/nullfuscator"><img src="https://img.shields.io/badge/version-0.2.3--beta-blue.svg" alt="Version"></a>
+  <a href="https://github.com/kotl1n/nullfuscator"><img src="https://img.shields.io/badge/version-0.2.4-blue.svg" alt="Version"></a>
   <a href="https://github.com/kotl1n/nullfuscator"><img src="https://img.shields.io/badge/java-17%2B-orange.svg" alt="Java 17+"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
   <a href="https://github.com/kotl1n/nullfuscator"><img src="https://img.shields.io/badge/build-offline%20%2F%20reproducible-brightgreen.svg" alt="Build Status"></a>
@@ -21,9 +21,9 @@
 
 **NULLFUSCATOR** is a standalone, deterministic Java bytecode obfuscator built on the OW2 ASM engine. Designed for modern JVM workloads (supporting Java 17 through Java 21+), NULLFUSCATOR significantly raises the cost of static reverse engineering, automated decompilation, runtime debugging, and code tampering.
 
-### 0.2.3-beta
+### 0.2.4
 
-This pre-release consolidates the core and transformer code after the 0.2.2 performance hardening work. It keeps the existing CLI, profile format, mapping v2 format, and transformation set intact. The release was rechecked with verifier and differential tests across the shipped profiles, Java 17/21 class files, mappings, enum and record metadata, Fabric/Mixin and ServiceLoader fixtures.
+This release fixes access and dispatch regressions during class renaming, method movement and field packing. Class renaming now preserves private-member behavior and package boundaries that remain externally visible. The default command uses the `light` profile, and `--dry-run` performs the same archive-size validation as a normal run without leaving output files behind. The release was rechecked with verifier and differential tests across shipped profiles, Java 17/21 class files, mappings, enum and record metadata, Fabric/Mixin, ServiceLoader and package-access fixtures.
 
 Unlike conventional obfuscators that merely rename symbols or recklessly bloat bytecode to the point of runtime instability, NULLFUSCATOR provides:
 - **Strict budget gates and bounded growth**: Enforces hard caps on instruction expansion, method size limits, and archive growth to eliminate `MethodTooLargeException` and avoid runaway memory leaks.
@@ -40,7 +40,7 @@ Unlike conventional obfuscators that merely rename symbols or recklessly bloat b
 
 ## Architecture & Transformation Pipeline
 
-NULLFUSCATOR applies up to 27 modular transformation passes organized into focused defensive layers:
+NULLFUSCATOR has 31 configurable transformation passes organized into focused defensive layers:
 
 ```
 +-------------------------------------------------------------------------------+
@@ -121,10 +121,12 @@ NULLFUSCATOR ships with four preconfigured HOCON profiles in `config/`:
 
 | Profile | Target Use-Case | Size Impact | Runtime Overhead | Protection Level |
 | :--- | :--- | :---: | :---: | :---: |
-| **`light.hocon`** | High-performance services, tick loops, games, Fabric mods | Minimal (+5% – +15%) | Near Zero (<1%) | Basic (Renaming + Strings + Stripping) |
-| **`balanced.hocon`** | Production commercial software, enterprise APIs | Moderate (+20% – +50%) | Low (1% – 5%) | High (Control flow + Number/String + Indirection) |
-| **`strong.hocon`** | Sensitive licensing modules, proprietary algorithms | Substantial (+50% – +120%) | Medium (5% – 15%) | Very High (+ InvokeDynamic + Exceptions + Anti-Deobf) |
-| **`full.hocon`** | Maximum paranoia, core cryptographic routines, crack-me challenges | Heavy (up to ~5.5x) | High (avoid on hot loops) | Maximum (All 27 passes enabled simultaneously) |
+| **`light.hocon`** | High-performance services, tick loops, games, Fabric mods | Input-dependent; budgeted | Measure on target workload | Basic (Renaming + Strings + Stripping) |
+| **`balanced.hocon`** | Production commercial software, enterprise APIs | Input-dependent; budgeted | Measure on target workload | High (Control flow + Number/String + Indirection) |
+| **`strong.hocon`** | Sensitive licensing modules, proprietary algorithms | Input-dependent; budgeted | Measure on target workload | Very High (+ InvokeDynamic + Exceptions + Anti-Deobf) |
+| **`full.hocon`** | Small sensitive routines, crack-me challenges | Input-dependent; set application budgets | Measure on target workload; avoid hot loops | Broad protection; some passes require explicit configuration |
+
+These profiles do not guarantee a percentage overhead or size multiplier. The historical measurements below describe one fixture; measure the current build on your application.
 
 Shared exclusions and naming options can be declared once and inherited by every relevant section:
 
@@ -139,6 +141,8 @@ defaults {
 ```
 
 `defaults.exempt` applies to every transformation. A section-level `exempt` list adds rules without replacing the shared list. `defaults.naming` applies to `classRenamer`, `methodRenamer`, `fieldRenamer`, and `recordMetadata`; values declared in a section override the shared values.
+
+Class renaming preserves access flags and keeps distinct packages separate. Packages containing retained classes, including a retained main class, keep their original package path. Other packages receive distinct opaque paths under `classRenamer.prefix`. Method extraction and relocation skip bodies that cannot legally access their dependencies from a carrier class.
 
 For a Fabric release that only needs resource and metadata cleanup, use `config/resource-hardening.hocon`. It is intentionally compatible with incomplete game classpaths; do not combine its `compatibility.allowIncompleteClasspath` override with bytecode transformations unless the dependencies have been reviewed.
 
@@ -203,6 +207,8 @@ This produces `build/nullfuscator-obf.jar`.
 ### 2. Run Obfuscation
 You can use the convenient `bin/nullfuscator` launcher or `java -jar build/nullfuscator-obf.jar`:
 
+With neither `--preset` nor `--config`, the CLI uses `light`. An explicit custom configuration enables only the passes it declares unless combined with a preset.
+
 ```bash
 # Minimal zero-ceremony run (auto-generates myapp-obf.jar)
 ./bin/nullfuscator myapp.jar
@@ -234,18 +240,18 @@ nullfuscator <input.jar> [output.jar] [options]
 | :--- | :--- | :--- | :--- |
 | `--input` | `-i` | `<path>` | Input JAR file (or 1st positional argument). |
 | `--output` | `-o` | `<path>` | Output JAR destination (defaults to `<input>-obf.jar`). |
-| `--preset` | `-p` | `<name>` | Built-in preset (`light`, `balanced`, `strong`, `full`). No external files required! |
+| `--preset` | `-p` | `<name>` | Built-in preset (`light`, `balanced`, `strong`, `full`); defaults to `light` when no config is supplied. |
 | `--config` | `-c` | `<path>` | Custom HOCON profile or preset name. Can be combined with `-p` for overrides. |
 | `--lib` | `-l` | `<path>` | External dependency JAR for classpath analysis (repeatable or comma-separated). |
 | `--seed` | `-s` | `<long>` | Fixed seed for reproducible obfuscation. If omitted, uses `SecureRandom`. |
 | `--mapping` | `-m` | `<path>` | ProGuard-compatible mapping destination (defaults to `<output>.map`). |
 | `--no-mapping`| `-M` | — | Explicitly disables mapping file generation. |
 | `--report` | `-r` | `<path>` | Generates a JSON execution report (schema v1) with timings and growth metrics. |
-| `--dry-run` / `--report-only` | — | — | Executes preflight and transformations in-memory without writing output JAR. |
+| `--dry-run` / `--report-only` | — | — | Runs preflight, transformations, frame computation and archive serialization without saving the JAR or mapping; enforces archive budgets and reports the measured `outputJarBytes`. |
 | `--verbose` | `-v` | — | Enables detailed stderr diagnostics for every transformation pass. |
 | `--quiet` | `-q` | — | Suppresses non-essential informational output. |
 | `--no-color` | — | — | Disables ANSI terminal coloring. |
-| `--version` | `-V` | — | Prints NULLFUSCATOR version (`0.2.3-beta`). |
+| `--version` | `-V` | — | Prints NULLFUSCATOR version (`0.2.4`). |
 | `--help` | `-h` | — | Displays command-line help summary. |
 
 ### Commands
@@ -290,7 +296,7 @@ Integrate NULLFUSCATOR directly into your Gradle build pipeline:
 ```groovy
 task obfuscate(type: JavaExec) {
     dependsOn jar
-    classpath = files('tools/nullfuscator-0.2.3-beta.jar')
+    classpath = files('tools/nullfuscator-0.2.4.jar')
     mainClass = 'com.nullfuscator.obf.core.Main'
 
     args = [

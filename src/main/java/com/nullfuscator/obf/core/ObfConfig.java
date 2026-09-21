@@ -108,13 +108,13 @@ public final class ObfConfig {
     }
 
     public static final List<PresetInfo> PRESET_INFOS = List.of(
-            new PresetInfo("light", "Basic", "+5% .. +15%", "<1%",
+            new PresetInfo("light", "Basic", "Input-dependent", "Measure",
                     "High-performance services, tick loops, games, Fabric mods"),
-            new PresetInfo("balanced", "High", "+20% .. +50%", "1% .. 5%",
+            new PresetInfo("balanced", "High", "Input-dependent", "Measure",
                     "Production commercial software, enterprise APIs (Recommended)"),
-            new PresetInfo("strong", "Very High", "+50% .. +120%", "5% .. 15%",
+            new PresetInfo("strong", "Very High", "Input-dependent", "Measure",
                     "Sensitive licensing modules, proprietary algorithms"),
-            new PresetInfo("full", "Maximum", "~5.5x", "High",
+            new PresetInfo("full", "Maximum", "Input-dependent", "Measure",
                     "Maximum paranoia, crack-mes, core cryptographic routines")
     );
 
@@ -182,14 +182,7 @@ public final class ObfConfig {
     }
 
     public List<String> libs() {
-        if (root.hasPath("libs")) {
-            try {
-                return root.getStringList("libs");
-            } catch (RuntimeException ignored) {
-                // Fall through.
-            }
-        }
-        return Collections.emptyList();
+        return root.hasPathOrNull("libs") ? safeStringList(root, "libs") : Collections.emptyList();
     }
 
     public Section section(String id) {
@@ -200,7 +193,7 @@ public final class ObfConfig {
                 section = section.withFallback(root.getConfig("defaults.naming"));
             }
 
-            List<String> globalExempt = root.hasPath("defaults.exempt")
+            List<String> globalExempt = root.hasPathOrNull("defaults.exempt")
                     ? safeStringList(root, "defaults.exempt")
                     : Collections.emptyList();
             return new Section(section, present, globalExempt);
@@ -211,7 +204,7 @@ public final class ObfConfig {
         try {
             return config.getStringList(path);
         } catch (RuntimeException e) {
-            return Collections.emptyList();
+            throw new IllegalArgumentException("configuration '" + path + "' must be a list of strings", e);
         }
     }
 
@@ -226,7 +219,7 @@ public final class ObfConfig {
             this.present = present;
 
             LinkedHashSet<String> exemptions = new LinkedHashSet<>(globalExempt);
-            if (c.hasPath("exempt")) {
+            if (c.hasPathOrNull("exempt")) {
                 exemptions.addAll(safeStringList(c, "exempt"));
             }
             this.exempt = new ExemptMatcher(new ArrayList<>(exemptions));
@@ -253,7 +246,7 @@ public final class ObfConfig {
         }
 
         public List<String> getStringList(String path) {
-            return c.hasPath(path) ? safeStringList(c, path) : Collections.emptyList();
+            return c.hasPathOrNull(path) ? safeStringList(c, path) : Collections.emptyList();
         }
 
         public boolean isExempt(String internalName) {

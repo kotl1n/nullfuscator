@@ -212,35 +212,39 @@ public final class ObfMapping {
         final Map<String, Map<String, String>> methodBack = new LinkedHashMap<>();
 
         String apply(String text) {
-            Matcher fm = FRAME.matcher(text);
+            Matcher headers = EXCEPTION_HEADER.matcher(text);
+            StringBuilder headerText = new StringBuilder();
+            while (headers.find()) {
+                String name = headers.group(2);
+                headers.appendReplacement(headerText, Matcher.quoteReplacement(
+                        headers.group(1) + classBack.getOrDefault(name, name)));
+            }
+            headers.appendTail(headerText);
+            Matcher fm = FRAME.matcher(headerText);
             StringBuilder sb = new StringBuilder();
             while (fm.find()) {
-                String obfClass = fm.group(1);
-                String obfMethod = fm.group(2);
+                String obfClass = fm.group(2);
+                String obfMethod = fm.group(3);
                 String origClass = classBack.getOrDefault(obfClass, obfClass);
                 Map<String, String> mm = methodBack.get(obfClass);
                 String origMethod = (mm != null) ? mm.getOrDefault(obfMethod, obfMethod) : obfMethod;
                 fm.appendReplacement(sb, Matcher.quoteReplacement(
-                        "at " + origClass + "." + origMethod));
+                        fm.group(1) + origClass + "." + origMethod));
             }
             fm.appendTail(sb);
-            String out = sb.toString();
-
-            List<String> keys = new ArrayList<>(classBack.keySet());
-            keys.sort((x, y) -> Integer.compare(y.length(), x.length()));
-            for (String obf : keys) {
-                out = out.replace(obf, classBack.get(obf));
-            }
-            return out;
+            return sb.toString();
         }
     }
 
     private static final Pattern FRAME =
-            Pattern.compile("at\\s+([\\w$.]+)\\.([\\w$<>]+)");
+            Pattern.compile("(?m)^(\\h*at\\h+(?:[^\\s(]*/)?)([^\\s(/:]+)\\.([^\\s.(/:]+)(?=\\()");
+    private static final Pattern EXCEPTION_HEADER = Pattern.compile(
+            "(?m)^(\\h*(?:(?:Caused by:|Suppressed:)\\h+|Exception in thread \"[^\"]*\"\\h+)?)"
+                    + "([^\\s:]+)(?=:|\\h*$)");
     private static final Pattern CLASS_LINE =
-            Pattern.compile("^([\\w$.]+)\\s*->\\s*([\\w$.]+):$");
+            Pattern.compile("^(\\S+)\\s*->\\s*(\\S+):$");
     private static final Pattern MEMBER_LINE =
-            Pattern.compile("^\\s+\\S+\\s+([\\w$<>]+)(?:\\([^)]*\\))?\\s*->\\s*([\\w$<>]+)$");
+            Pattern.compile("^\\s+\\S+\\s+([^\\s()]+)(?:\\([^)]*\\))?\\s*->\\s*(\\S+)$");
 
     private static Reversed parse(File mappingFile) throws IOException {
         Reversed rev = new Reversed();
@@ -264,7 +268,7 @@ public final class ObfMapping {
                 }
 
                 Matcher mm = MEMBER_LINE.matcher(line);
-                if (mm.matches() && currentObfClass != null) {
+                if (line.contains("(") && mm.matches() && currentObfClass != null) {
                     String origName = mm.group(1);
                     String obfName = mm.group(2);
                     rev.methodBack.get(currentObfClass).put(obfName, origName);

@@ -28,6 +28,14 @@ public final class MethodRelocationTransformer implements Transformer {
 
     @Override
     public void transform(ObfContext ctx) {
+        try (RelocationAccess access = new RelocationAccess(ctx)) {
+            transform(ctx, access);
+        } catch (java.io.IOException e) {
+            throw new java.io.UncheckedIOException(e);
+        }
+    }
+
+    private void transform(ObfContext ctx, RelocationAccess access) {
         var sec = ctx.config().section(id());
         int percent = clamp(sec.getInt("percent", 70), 0, 100);
         int maxMethods = Math.max(1, sec.getInt("maxMethods", 96));
@@ -51,7 +59,7 @@ public final class MethodRelocationTransformer implements Transformer {
                     continue;
                 }
                 int score = eligibleScore(mn, minInstructions);
-                if (score >= 0) {
+                if (score >= 0 && access.canMove(cn, mn)) {
                     candidates.add(new Candidate(cn, mn, score));
                 }
             }

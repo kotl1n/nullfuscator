@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.4
+
+- Preserved access semantics during class renaming: private members remain private, package-private classes remain together, and packages that reference retained or external classes stay in place.
+- Made method extraction and relocation skip bodies that would lose legal access when moved to generated carriers.
+- Fixed field packing for constructor initialization and inherited field accesses.
+- Made `light` the default profile when neither `--preset` nor `--config` is supplied.
+- Made `--dry-run` serialize the archive in memory and enforce output-size budgets without writing artifacts.
+- Hardened configuration list validation, stack-trace retracing, negative seed parsing, and `--quiet` output handling.
+- Added compatibility coverage for package visibility, private dispatch, nested classes, inherited fields, external dependencies, dry-run budgets, CLI behavior, and retracing.
+
 ## 0.2.3-beta
 
 - Refactored the core and transformer implementations for a consistent code style and simpler maintenance.

@@ -8,6 +8,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.util.ArrayList;
@@ -77,13 +78,39 @@ public final class JarIO {
     }
 
     private static void writeArchive(Path output, ObfContext ctx) throws IOException {
+        try (OutputStream out = Files.newOutputStream(output)) {
+            writeArchive(out, ctx);
+        }
+    }
+
+    public static void verify(ObfContext ctx) throws IOException {
+        CountingOutputStream out = new CountingOutputStream();
+        writeArchive(out, ctx);
+        BudgetPolicy.verifyJar(ctx, out.count);
+    }
+
+    private static final class CountingOutputStream extends OutputStream {
+        private long count;
+
+        @Override
+        public void write(int value) {
+            count++;
+        }
+
+        @Override
+        public void write(byte[] bytes, int offset, int length) {
+            count += length;
+        }
+    }
+
+    private static void writeArchive(OutputStream output, ObfContext ctx) throws IOException {
         var urls = new ArrayList<URL>();
         for (String lib : ctx.config().libs()) {
             urls.add(Path.of(lib).toUri().toURL());
         }
         try (URLClassLoader loader = new URLClassLoader(urls.toArray(new URL[0]),
                      HierarchyClassWriter.class.getClassLoader());
-             JarOutputStream out = new JarOutputStream(Files.newOutputStream(output))) {
+             JarOutputStream out = new JarOutputStream(output)) {
             out.setLevel(java.util.zip.Deflater.BEST_COMPRESSION);
             var hierarchy = new HierarchyClassWriter.Hierarchy(ctx.classMap(), loader);
             // JarInputStream only recognizes a manifest at the start of the archive.

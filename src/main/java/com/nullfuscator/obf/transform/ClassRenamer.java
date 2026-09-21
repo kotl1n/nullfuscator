@@ -5,6 +5,7 @@ import com.nullfuscator.obf.core.Transformer;
 import com.nullfuscator.obf.util.NameGenerator;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.commons.Remapper;
+import org.objectweb.asm.commons.ClassRemapper;
 import org.objectweb.asm.tree.*;
 
 import java.nio.charset.StandardCharsets;
@@ -63,7 +64,7 @@ public final class ClassRenamer implements Transformer {
 
         String mixinBlob = Remapping.mixinJsonBlob(ctx);
 
-        final Map<String, String> classMap = new HashMap<>();
+        Set<String> candidates = new HashSet<>();
         for (ClassNode cn : ctx.targets(id())) {
             String name = cn.name;
             if (protectedNames.contains(name)) {
@@ -76,11 +77,49 @@ public final class ClassRenamer implements Transformer {
                 }
             }
 
-            String newName = gen.nextRandomClass(prefix, ctx.random(), depth);
+            candidates.add(name);
+        }
+
+        Set<String> pinnedPackages = new HashSet<>();
+        Set<String> occupiedPackages = new HashSet<>();
+        for (ClassNode cn : ctx.classes()) {
+            String pkg = packagePrefix(cn.name);
+            occupiedPackages.add(pkg);
+            if (!candidates.contains(cn.name)) {
+                pinnedPackages.add(pkg);
+            }
+            cn.accept(new ClassRemapper(new ClassNode(), new Remapper(Opcodes.ASM9) {
+                @Override
+                public String map(String name) {
+                    if (ctx.getClass(name) == null && packagePrefix(name).equals(pkg)) {
+                        pinnedPackages.add(pkg);
+                    }
+                    return name;
+                }
+            }));
+        }
+
+        Map<String, String> packages = new HashMap<>();
+        final Map<String, String> classMap = new HashMap<>();
+        for (ClassNode cn : ctx.classes()) {
+            if (!candidates.contains(cn.name)) {
+                continue;
+            }
+            String pkg = packagePrefix(cn.name);
+            String destination = packages.get(pkg);
+            if (destination == null) {
+                destination = pkg;
+                if (!pinnedPackages.contains(pkg)) {
+                    do {
+                        destination = gen.nextRandomClass(prefix, ctx.random(), depth) + "/";
+                    } while (!occupiedPackages.add(destination));
+                }
+                packages.put(pkg, destination);
+            }
+            String newName = gen.nextRandomClass(destination, ctx.random(), depth);
+            String name = cn.name;
             classMap.put(name, newName);
             ctx.mapping().recordClass(name, newName);
-
-            makePublicDeep(cn);
         }
 
         if (classMap.isEmpty()) {
@@ -235,28 +274,7 @@ public final class ClassRenamer implements Transformer {
         }
     }
 
-    private static void makePublicDeep(ClassNode cn) {
-        cn.access = pub(cn.access);
-
-        if (cn.methods != null) {
-            for (MethodNode m : cn.methods) {
-                // Object streams require private readObject/writeObject hooks.
-                if (!MethodRenamer.isSerializationHook(m)) {
-                    m.access = pub(m.access);
-                }
-            }
-        }
-
-        if (cn.fields != null) {
-            for (FieldNode f : cn.fields) {
-                if (!f.name.equals("serialPersistentFields")) {
-                    f.access = pub(f.access);
-                }
-            }
-        }
-    }
-
-    private static int pub(int access) {
-        return (access & ~(Opcodes.ACC_PRIVATE | Opcodes.ACC_PROTECTED)) | Opcodes.ACC_PUBLIC;
+    private static String packagePrefix(String name) {
+        return name.substring(0, name.lastIndexOf('/') + 1);
     }
 }
