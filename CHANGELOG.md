@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.5
+
+- Reduced cross-class dispersion runtime costs with opaque VarHandle access to private generated state on archives already containing Java 11+ classes. Each helper retains its state reads, updates and arithmetic masking.
+- Kept profile percentages, encryption layers, operation/helper budgets and measured protection coverage unchanged. Preserved application volatile-field semantics and invocation-local state sampling for concurrent calls.
+- Preserved the previous implementation for archives containing only older class files; added `crossClassDispersion.opaqueState = false` to restore it explicitly.
+- Added configurable benchmark warmup and measurement rounds, raw before/after measurements and coverage comparisons. Interleaved fixture medians improved by 24.6% for strong and 50.6% for full, with increased memory usage and archive size documented in `docs/PERFORMANCE.md`.
+- Extended regression coverage across all 15 dispersed integer/long operations, overflow, shift boundaries, concurrent calls, live state updates, renamed fields/classes and mixed class-file versions.
+
 ## 0.2.4
 
 - Preserved access semantics during class renaming: private members remain private, package-private classes remain together, and packages that reference retained or external classes stay in place.

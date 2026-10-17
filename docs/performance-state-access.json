@@ -1,0 +1,438 @@
+{
+  "date": "2026-10-17",
+  "seed": 20260910,
+  "measurement_builds": {
+    "before_sha256": "fb04e80452b3dc5a90f6a9e83ad5f28c0dbfab9cb45257ee73de2d490f42a452",
+    "after_sha256": "5debd0255381bc9fb82e1b8144438f78125a3ed8172809d1a22af497c82aba15"
+  },
+  "paired_summary": {
+    "strong": {
+      "before": {
+        "kernel_ms": 845.209175,
+        "launch_ms": 2042.5575730000674,
+        "process_rss_mib": 54.92578125
+      },
+      "after": {
+        "kernel_ms": 637.227815,
+        "launch_ms": 1549.4118819999585,
+        "process_rss_mib": 68.36328125
+      },
+      "kernel_change_percent": -24.607087352074707
+    },
+    "full": {
+      "before": {
+        "kernel_ms": 8002.226455,
+        "launch_ms": 16337.893214999895,
+        "process_rss_mib": 101.3046875
+      },
+      "after": {
+        "kernel_ms": 3956.871358,
+        "launch_ms": 9400.272709999854,
+        "process_rss_mib": 137.375
+      },
+      "kernel_change_percent": -50.55286950136679
+    }
+  },
+  "paired_samples": {
+    "warmup_rounds": 1000000,
+    "rounds": 1000000,
+    "runs": 3,
+    "samples": [
+      {
+        "baseline": {
+          "checksum": "1020676914",
+          "launch_ms": 279.27083200006564,
+          "kernel_ms": 23.329275,
+          "process_rss_mib": 46.8125
+        },
+        "profiles": {
+          "strong": {
+            "before": {
+              "checksum": "1020676914",
+              "launch_ms": 2910.815497000158,
+              "kernel_ms": 1063.382028,
+              "process_rss_mib": 54.33203125
+            },
+            "after": {
+              "checksum": "1020676914",
+              "launch_ms": 1743.908532999967,
+              "kernel_ms": 649.650073,
+              "process_rss_mib": 68.36328125
+            }
+          },
+          "full": {
+            "before": {
+              "checksum": "1020676914",
+              "launch_ms": 17808.492376000002,
+              "kernel_ms": 8002.226455,
+              "process_rss_mib": 90.140625
+            },
+            "after": {
+              "checksum": "1020676914",
+              "launch_ms": 9279.773526000099,
+              "kernel_ms": 3929.202353,
+              "process_rss_mib": 137.375
+            }
+          }
+        }
+      },
+      {
+        "baseline": {
+          "checksum": "1020676914",
+          "launch_ms": 320.1578170001085,
+          "kernel_ms": 37.609595,
+          "process_rss_mib": 46.11328125
+        },
+        "profiles": {
+          "strong": {
+            "after": {
+              "checksum": "1020676914",
+              "launch_ms": 1544.2745790001027,
+              "kernel_ms": 637.227815,
+              "process_rss_mib": 69.171875
+            },
+            "before": {
+              "checksum": "1020676914",
+              "launch_ms": 2031.8619309998667,
+              "kernel_ms": 840.946253,
+              "process_rss_mib": 54.92578125
+            }
+          },
+          "full": {
+            "after": {
+              "checksum": "1020676914",
+              "launch_ms": 9400.272709999854,
+              "kernel_ms": 3956.871358,
+              "process_rss_mib": 122.71875
+            },
+            "before": {
+              "checksum": "1020676914",
+              "launch_ms": 15332.6143459999,
+              "kernel_ms": 6791.811517,
+              "process_rss_mib": 103.09765625
+            }
+          }
+        }
+      },
+      {
+        "baseline": {
+          "checksum": "1020676914",
+          "launch_ms": 199.84501300018565,
+          "kernel_ms": 17.608415,
+          "process_rss_mib": 45.2578125
+        },
+        "profiles": {
+          "strong": {
+            "before": {
+              "checksum": "1020676914",
+              "launch_ms": 2042.5575730000674,
+              "kernel_ms": 845.209175,
+              "process_rss_mib": 56.140625
+            },
+            "after": {
+              "checksum": "1020676914",
+              "launch_ms": 1549.4118819999585,
+              "kernel_ms": 579.177488,
+              "process_rss_mib": 66.16796875
+            }
+          },
+          "full": {
+            "before": {
+              "checksum": "1020676914",
+              "launch_ms": 16337.893214999895,
+              "kernel_ms": 8262.439019,
+              "process_rss_mib": 101.3046875
+            },
+            "after": {
+              "checksum": "1020676914",
+              "launch_ms": 9826.218038999968,
+              "kernel_ms": 4195.489414,
+              "process_rss_mib": 146.37890625
+            }
+          }
+        }
+      }
+    ]
+  },
+  "short_before": {
+    "environment": {
+      "java": "openjdk version \"21.0.12.1\" 2026-08-18",
+      "runs": 5
+    },
+    "input_bytes": 7146,
+    "baseline": {
+      "checksum": "79434320",
+      "launch_ms": 262.6200180000069,
+      "kernel_ms": 17.668771,
+      "process_rss_mib": 46.07421875
+    },
+    "profiles": {
+      "balanced": {
+        "obfuscation_ms": 562.4411060000511,
+        "obfuscator_rss_mib": 92.0625,
+        "output_bytes": 17591,
+        "class_bytes": 34794,
+        "classes": 6,
+        "semantic_core_methods": 0,
+        "checksum": "79434320",
+        "launch_ms": 311.3587450000068,
+        "kernel_ms": 62.016918,
+        "process_rss_mib": 47.92578125
+      },
+      "strong": {
+        "obfuscation_ms": 748.2969600000615,
+        "obfuscator_rss_mib": 120.3046875,
+        "output_bytes": 67618,
+        "class_bytes": 113621,
+        "classes": 35,
+        "semantic_core_methods": 3,
+        "checksum": "79434320",
+        "launch_ms": 481.14311799986353,
+        "kernel_ms": 115.813677,
+        "process_rss_mib": 54.81640625
+      },
+      "full": {
+        "obfuscation_ms": 912.658466000039,
+        "obfuscator_rss_mib": 144.609375,
+        "output_bytes": 290033,
+        "class_bytes": 450028,
+        "classes": 83,
+        "semantic_core_methods": 3,
+        "checksum": "79434320",
+        "launch_ms": 2438.7902040000426,
+        "kernel_ms": 898.327422,
+        "process_rss_mib": 91.796875
+      }
+    }
+  },
+  "short_after": {
+    "environment": {
+      "java": "openjdk version \"21.0.12.1\" 2026-08-18",
+      "runs": 5
+    },
+    "input_bytes": 7146,
+    "baseline": {
+      "checksum": "79434320",
+      "launch_ms": 233.7135599998419,
+      "kernel_ms": 14.447487,
+      "process_rss_mib": 46.203125
+    },
+    "profiles": {
+      "balanced": {
+        "obfuscation_ms": 564.0508970000155,
+        "obfuscator_rss_mib": 93.50390625,
+        "output_bytes": 18737,
+        "class_bytes": 37386,
+        "classes": 6,
+        "semantic_core_methods": 0,
+        "checksum": "79434320",
+        "launch_ms": 311.1668169999575,
+        "kernel_ms": 50.436479,
+        "process_rss_mib": 47.91796875
+      },
+      "strong": {
+        "obfuscation_ms": 798.4758130000955,
+        "obfuscator_rss_mib": 132.46875,
+        "output_bytes": 69780,
+        "class_bytes": 118516,
+        "classes": 35,
+        "semantic_core_methods": 3,
+        "checksum": "79434320",
+        "launch_ms": 457.2126230000322,
+        "kernel_ms": 103.079781,
+        "process_rss_mib": 65.296875
+      },
+      "full": {
+        "obfuscation_ms": 936.3543720000962,
+        "obfuscator_rss_mib": 191.74609375,
+        "output_bytes": 297321,
+        "class_bytes": 468806,
+        "classes": 83,
+        "semantic_core_methods": 3,
+        "checksum": "79434320",
+        "launch_ms": 2353.3105349999914,
+        "kernel_ms": 504.807248,
+        "process_rss_mib": 126.5625
+      }
+    }
+  },
+  "long_before": {
+    "environment": {
+      "java": "openjdk version \"21.0.12.1\" 2026-08-18",
+      "runs": 3,
+      "warmup_rounds": 1000000,
+      "rounds": 1000000
+    },
+    "input_bytes": 7139,
+    "baseline": {
+      "checksum": "1020676914",
+      "launch_ms": 314.4388760001675,
+      "kernel_ms": 26.480359,
+      "process_rss_mib": 45.96875
+    },
+    "profiles": {
+      "strong": {
+        "obfuscation_ms": 766.6279229999873,
+        "obfuscator_rss_mib": 119.56640625,
+        "output_bytes": 67619,
+        "class_bytes": 113621,
+        "classes": 35,
+        "semantic_core_methods": 3,
+        "checksum": "1020676914",
+        "launch_ms": 2518.552371999931,
+        "kernel_ms": 1044.776145,
+        "process_rss_mib": 54.9453125
+      },
+      "full": {
+        "obfuscation_ms": 925.5766790001871,
+        "obfuscator_rss_mib": 144.61328125,
+        "output_bytes": 290032,
+        "class_bytes": 450028,
+        "classes": 83,
+        "semantic_core_methods": 3,
+        "checksum": "1020676914",
+        "launch_ms": 18989.43370500001,
+        "kernel_ms": 9007.897591,
+        "process_rss_mib": 93.14453125
+      }
+    }
+  },
+  "long_after": {
+    "environment": {
+      "java": "openjdk version \"21.0.12.1\" 2026-08-18",
+      "runs": 3,
+      "warmup_rounds": 1000000,
+      "rounds": 1000000
+    },
+    "input_bytes": 7139,
+    "baseline": {
+      "checksum": "1020676914",
+      "launch_ms": 194.57216799992239,
+      "kernel_ms": 18.155666,
+      "process_rss_mib": 46.46484375
+    },
+    "profiles": {
+      "strong": {
+        "obfuscation_ms": 711.4786089998688,
+        "obfuscator_rss_mib": 133.21875,
+        "output_bytes": 69781,
+        "class_bytes": 118516,
+        "classes": 35,
+        "semantic_core_methods": 3,
+        "checksum": "1020676914",
+        "launch_ms": 1535.725100000036,
+        "kernel_ms": 605.471973,
+        "process_rss_mib": 67.27734375
+      },
+      "full": {
+        "obfuscation_ms": 856.9571949999499,
+        "obfuscator_rss_mib": 192.91796875,
+        "output_bytes": 297320,
+        "class_bytes": 468806,
+        "classes": 83,
+        "semantic_core_methods": 3,
+        "checksum": "1020676914",
+        "launch_ms": 11303.650710999818,
+        "kernel_ms": 4608.248879,
+        "process_rss_mib": 145.72265625
+      }
+    }
+  },
+  "coverage": {
+    "balanced": {
+      "before": [
+        "    numberEncryption: rewrote 93 numeric constants across 2 classes using 2 layers",
+        "    crossClassDispersion: 57 ops, 24 shared helpers, 4 sinks; limits=512 ops, 96 helpers, 64/source class",
+        "    referenceHiding: hid 11 calls using 2 protected classes; bootstrap bodies=2"
+      ],
+      "after": [
+        "    numberEncryption: rewrote 93 numeric constants across 2 classes using 2 layers",
+        "    crossClassDispersion: 57 ops, 24 shared helpers, 4 sinks; limits=512 ops, 96 helpers, 64/source class",
+        "    referenceHiding: hid 11 calls using 2 protected classes; bootstrap bodies=2"
+      ],
+      "legacy": [
+        "    numberEncryption: rewrote 93 numeric constants across 2 classes using 2 layers",
+        "    crossClassDispersion: 57 ops, 24 shared helpers, 4 sinks; limits=512 ops, 96 helpers, 64/source class",
+        "    referenceHiding: hid 11 calls using 2 protected classes; bootstrap bodies=2"
+      ]
+    },
+    "strong": {
+      "before": [
+        "    semanticCore: protected=3 methods, encodedOperations=30",
+        "    semanticFabric: protected=3 methods, fragments=30, carriers=6",
+        "    antiDebug: guarded 0 methods with 0 detectors",
+        "    flatten: 1 methods flattened",
+        "    exceptionReturn: routed 4 sites across 4 methods",
+        "    numberEncryption: rewrote 351 numeric constants across 9 classes using 3 layers",
+        "    antiAI: liveHelpers=0 encodedConsts=0",
+        "    crossClassDispersion: 240 ops, 37 shared helpers, 8 sinks; limits=2048 ops, 256 helpers, 128/source class",
+        "    referenceHiding: hid 73 calls using 2 protected classes; bootstrap bodies=2"
+      ],
+      "after": [
+        "    semanticCore: protected=3 methods, encodedOperations=30",
+        "    semanticFabric: protected=3 methods, fragments=30, carriers=6",
+        "    antiDebug: guarded 0 methods with 0 detectors",
+        "    flatten: 1 methods flattened",
+        "    exceptionReturn: routed 4 sites across 4 methods",
+        "    numberEncryption: rewrote 351 numeric constants across 9 classes using 3 layers",
+        "    antiAI: liveHelpers=0 encodedConsts=0",
+        "    crossClassDispersion: 240 ops, 37 shared helpers, 8 sinks; limits=2048 ops, 256 helpers, 128/source class",
+        "    referenceHiding: hid 73 calls using 2 protected classes; bootstrap bodies=2"
+      ],
+      "legacy": [
+        "    semanticCore: protected=3 methods, encodedOperations=30",
+        "    semanticFabric: protected=3 methods, fragments=30, carriers=6",
+        "    antiDebug: guarded 0 methods with 0 detectors",
+        "    flatten: 1 methods flattened",
+        "    exceptionReturn: routed 4 sites across 4 methods",
+        "    numberEncryption: rewrote 351 numeric constants across 9 classes using 3 layers",
+        "    antiAI: liveHelpers=0 encodedConsts=0",
+        "    crossClassDispersion: 240 ops, 37 shared helpers, 8 sinks; limits=2048 ops, 256 helpers, 128/source class",
+        "    referenceHiding: hid 73 calls using 2 protected classes; bootstrap bodies=2"
+      ]
+    },
+    "full": {
+      "before": [
+        "    semanticCore: protected=3 methods, encodedOperations=30",
+        "    semanticFabric: protected=5 methods, fragments=50, carriers=10",
+        "    antiDebug: guarded 7 methods with 6 detectors",
+        "    flatten: 6 methods flattened",
+        "    exceptionReturn: routed 10 sites across 10 methods",
+        "    numberEncryption: rewrote 869 numeric constants across 19 classes using 5 layers",
+        "    antiAI: liveHelpers=0 encodedConsts=0",
+        "    crossClassDispersion: 3142 ops, 290 shared helpers, 24 sinks; limits=8192 ops, 2048 helpers, 6000/source class",
+        "    referenceHiding: hid 1225 calls using 12 protected classes; bootstrap bodies=8"
+      ],
+      "after": [
+        "    semanticCore: protected=3 methods, encodedOperations=30",
+        "    semanticFabric: protected=5 methods, fragments=50, carriers=10",
+        "    antiDebug: guarded 7 methods with 6 detectors",
+        "    flatten: 6 methods flattened",
+        "    exceptionReturn: routed 10 sites across 10 methods",
+        "    numberEncryption: rewrote 869 numeric constants across 19 classes using 5 layers",
+        "    antiAI: liveHelpers=0 encodedConsts=0",
+        "    crossClassDispersion: 3142 ops, 290 shared helpers, 24 sinks; limits=8192 ops, 2048 helpers, 6000/source class",
+        "    referenceHiding: hid 1225 calls using 12 protected classes; bootstrap bodies=8"
+      ],
+      "legacy": [
+        "    semanticCore: protected=3 methods, encodedOperations=30",
+        "    semanticFabric: protected=5 methods, fragments=50, carriers=10",
+        "    antiDebug: guarded 7 methods with 6 detectors",
+        "    flatten: 6 methods flattened",
+        "    exceptionReturn: routed 10 sites across 10 methods",
+        "    numberEncryption: rewrote 869 numeric constants across 19 classes using 5 layers",
+        "    antiAI: liveHelpers=0 encodedConsts=0",
+        "    crossClassDispersion: 3142 ops, 290 shared helpers, 24 sinks; limits=8192 ops, 2048 helpers, 6000/source class",
+        "    referenceHiding: hid 1225 calls using 12 protected classes; bootstrap bodies=8"
+      ]
+    }
+  },
+  "verified_build_before_version_bump": {
+    "sha256": "063cb7a7bf5dd703ff802b450787e503cac9b2229c8edb41c6b07b65085a23a0",
+    "reproduces_measured_outputs": [
+      "strong",
+      "full"
+    ],
+    "tool_version": "0.2.4"
+  }
+}

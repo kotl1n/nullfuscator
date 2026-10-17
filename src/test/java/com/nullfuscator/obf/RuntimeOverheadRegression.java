@@ -142,6 +142,138 @@ public final class RuntimeOverheadRegression implements Opcodes {
         System.out.println("PASS debugger guards: input synthetic method protected, generated helper not guarded again");
     }
 
+    private static void dispersion(int version, boolean opaque, boolean mixed) throws Exception {
+        ObfContext ctx = context("crossClassDispersion { enabled:true, dispersalPercent:100, "
+                + "sinks:2, variantsPerOpcode:1, opaqueState:" + opaque + " }\n"
+                + "fieldRenamer { enabled:true }\nclassRenamer { enabled:true }");
+        ClassNode cn = GrowthRegression.corpus();
+        cn.version = version;
+        for (MethodNode method : cn.methods) {
+            boolean wide = method.desc.equals("(JJ)J");
+            int opcode = Integer.parseInt(method.name.substring(2));
+            method.instructions.clear();
+            method.instructions.add(new VarInsnNode(wide ? LLOAD : ILOAD, 0));
+            method.instructions.add(new VarInsnNode(wide ? LLOAD : ILOAD, wide ? 2 : 1));
+            method.instructions.add(new InsnNode(opcode));
+            method.instructions.add(new InsnNode(wide ? LRETURN : IRETURN));
+            method.maxLocals = wide ? 4 : 2;
+            method.maxStack = wide ? 4 : 2;
+        }
+        cn.fields.add(new FieldNode(ACC_PUBLIC | ACC_STATIC | ACC_VOLATILE, "application", "J", null, null));
+        ctx.putClass(cn);
+        if (mixed) {
+            ClassNode legacy = new ClassNode();
+            legacy.version = V1_8;
+            legacy.access = ACC_PUBLIC;
+            legacy.name = "LegacyMarker";
+            legacy.superName = "java/lang/Object";
+            ctx.putClass(legacy);
+        }
+        ctx.initializePolicies();
+        ObfContext original = context("");
+        ClassNode copy = new ClassNode();
+        cn.accept(copy);
+        original.putClass(copy);
+        Class<?> baseline = load(original, cn.name);
+        new CrossClassDispersionTransformer().transform(ctx);
+        boolean expectOpaque = opaque && version >= V11;
+        int routed = 0;
+        for (MethodNode method : cn.methods) {
+            for (AbstractInsnNode insn : method.instructions) {
+                if (insn instanceof MethodInsnNode call && ctx.isDispersionCarrier(ctx.getClass(call.owner))) routed++;
+            }
+        }
+        check(routed == GrowthRegression.OPS.length);
+        for (ClassNode carrier : ctx.classes()) {
+            if (!ctx.isDispersionCarrier(carrier)) continue;
+            check(carrier.version == (expectOpaque ? V11 : V1_8));
+            for (MethodNode method : carrier.methods) {
+                new org.objectweb.asm.tree.analysis.Analyzer<>(
+                        new org.objectweb.asm.tree.analysis.BasicVerifier()).analyze(carrier.name, method);
+                if (method.name.equals("<clinit>")) continue;
+                long reads = Arrays.stream(method.instructions.toArray()).filter(i ->
+                        i instanceof MethodInsnNode call && call.owner.equals("java/lang/invoke/VarHandle")
+                                && call.name.equals("getOpaque")).count();
+                long writes = Arrays.stream(method.instructions.toArray()).filter(i ->
+                        i instanceof MethodInsnNode call && call.owner.equals("java/lang/invoke/VarHandle")
+                                && call.name.equals("setOpaque")).count();
+                check(reads == (expectOpaque ? 1 : 0) && writes == reads);
+            }
+        }
+        new FieldRenamer().transform(ctx);
+        new ClassRenamer().transform(ctx);
+        String renamed = ctx.classes().stream().filter(c -> ctx.originalName(c.name).equals("Fixture"))
+                .findFirst().orElseThrow().name;
+        check(ctx.getClass(renamed).fields.stream().anyMatch(f -> f.desc.equals("J")
+                && (f.access & ACC_VOLATILE) != 0));
+        Class<?> actual = load(ctx, renamed);
+        List<java.lang.reflect.Method> methods = Arrays.stream(baseline.getDeclaredMethods()).toList();
+        long[] edges = {0, 1, -1, Integer.MIN_VALUE, Integer.MAX_VALUE, Long.MIN_VALUE, Long.MAX_VALUE,
+                -65, -33, 31, 32, 63, 64};
+        for (var method : methods) {
+            var transformed = actual.getMethod(method.getName(), method.getParameterTypes());
+            for (long x : edges) for (long y : edges) {
+                Object[] args = method.getParameterTypes()[0] == long.class
+                        ? new Object[]{x, y} : new Object[]{(int) x, (int) y};
+                check(method.invoke(null, args).equals(transformed.invoke(null, args)));
+            }
+        }
+        ExecutorService pool = Executors.newFixedThreadPool(4);
+        try {
+            List<Callable<Void>> jobs = new ArrayList<>();
+            for (int thread = 0; thread < 4; thread++) {
+                final int seed = thread;
+                jobs.add(() -> {
+                    Random random = new Random(seed);
+                    for (int i = 0; i < 400; i++) {
+                        for (var method : methods) {
+                            var transformed = actual.getMethod(method.getName(), method.getParameterTypes());
+                            long x = random.nextLong(), y = random.nextLong();
+                            Object[] args = method.getParameterTypes()[0] == long.class
+                                    ? new Object[]{x, y} : new Object[]{(int) x, (int) y};
+                            check(method.invoke(null, args).equals(transformed.invoke(null, args)));
+                        }
+                    }
+                    return null;
+                });
+            }
+            for (Future<Void> result : pool.invokeAll(jobs)) result.get();
+        } finally { pool.shutdownNow(); }
+        for (int opcode : new int[]{IADD, LADD}) {
+            boolean wide = opcode == LADD;
+            MethodNode caller = ctx.getClass(renamed).methods.stream()
+                    .filter(m -> m.name.equals("op" + opcode)).findFirst().orElseThrow();
+            MethodInsnNode call = (MethodInsnNode) Arrays.stream(caller.instructions.toArray())
+                    .filter(i -> i instanceof MethodInsnNode).findFirst().orElseThrow();
+            ClassNode carrier = ctx.getClass(call.owner);
+            String descriptor = expectOpaque ? (wide ? "[J" : "[I") : (wide ? "J" : "I");
+            FieldNode state = carrier.fields.stream().filter(f -> f.desc.equals(descriptor)).findFirst().orElseThrow();
+            var field = actual.getClassLoader().loadClass(call.owner.replace('/', '.')).getDeclaredField(state.name);
+            field.setAccessible(true);
+            Object array = expectOpaque ? field.get(null) : null;
+            if (expectOpaque) {
+                if (wide) ((long[]) array)[0] = 0; else ((int[]) array)[0] = 0;
+            } else {
+                if (wide) field.setLong(null, 0); else field.setInt(null, 0);
+            }
+            if (wide) check(actual.getMethod("op" + opcode, long.class, long.class).invoke(null, 7L, 11L).equals(18L));
+            else check(actual.getMethod("op" + opcode, int.class, int.class).invoke(null, 7, 11).equals(18));
+            long value = expectOpaque ? (wide ? ((long[]) array)[0] : ((int[]) array)[0])
+                    : (wide ? field.getLong(null) : field.getInt(null));
+            check(value != 0);
+        }
+        System.out.println("PASS dispersion state: version=" + version + ", opaque=" + expectOpaque
+                + ", mixed=" + mixed + "; all 15 operations, overflow, shifts, concurrency, renaming, live updates");
+    }
+
     private static void check(boolean ok) { if (!ok) throw new AssertionError(); }
-    public static void main(String[] args) throws Exception { returns(); accessors(); guards(); }
+    public static void main(String[] args) throws Exception {
+        returns(); accessors(); guards();
+        dispersion(V1_8, true, false);
+        dispersion(V9, true, false);
+        dispersion(V11, true, false);
+        dispersion(V17, true, false);
+        dispersion(V17, false, false);
+        dispersion(V17, true, true);
+    }
 }

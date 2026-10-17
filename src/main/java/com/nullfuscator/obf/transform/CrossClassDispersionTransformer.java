@@ -3,7 +3,10 @@ package com.nullfuscator.obf.transform;
 import com.nullfuscator.obf.core.Limits;
 import com.nullfuscator.obf.core.ObfContext;
 import com.nullfuscator.obf.core.Transformer;
+import org.objectweb.asm.ConstantDynamic;
+import org.objectweb.asm.Handle;
 import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.*;
 
 import java.util.ArrayList;
@@ -16,6 +19,14 @@ public final class CrossClassDispersionTransformer implements Transformer {
 
     private static final String INT_STATE = "$i";
     private static final String LONG_STATE = "$j";
+    private static final String VAR_HANDLE = "java/lang/invoke/VarHandle";
+    private static final Handle HANDLE_BOOTSTRAP = new Handle(Opcodes.H_INVOKESTATIC,
+            "java/lang/invoke/ConstantBootstraps", "invoke",
+            "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/Class;"
+                    + "Ljava/lang/invoke/MethodHandle;[Ljava/lang/Object;)Ljava/lang/Object;", false);
+    private static final Handle ARRAY_HANDLE_FACTORY = new Handle(Opcodes.H_INVOKESTATIC,
+            "java/lang/invoke/MethodHandles", "arrayElementVarHandle",
+            "(Ljava/lang/Class;)Ljava/lang/invoke/VarHandle;", false);
 
     private static final Map<Integer, String[]> OPS = new HashMap<>();
 
@@ -64,6 +75,8 @@ public final class CrossClassDispersionTransformer implements Transformer {
 
         List<ClassNode> targets = ctx.targets(id());
         Random rnd = ctx.random();
+        boolean opaqueState = section.getBoolean("opaqueState", true)
+                && targets.stream().anyMatch(c -> (c.version & 0xFFFF) >= Opcodes.V11);
         // Lazily allocate sinks and reuse a bounded family for each opcode. In particular,
         // number encryption must not turn every generated XOR/ADD into a new method.
         List<ClassNode> sinks = new ArrayList<>();
@@ -121,7 +134,7 @@ public final class CrossClassDispersionTransformer implements Transformer {
                                 name = "a/d/" + ctx.names().next();
                             } while (ctx.getClass(name) != null);
 
-                            ClassNode sink = buildSink(name, rnd);
+                            ClassNode sink = buildSink(name, rnd, opaqueState);
                             ctx.markDispersionCarrier(sink);
                             ctx.putClass(sink);
                             sinks.add(sink);
@@ -129,7 +142,7 @@ public final class CrossClassDispersionTransformer implements Transformer {
 
                         ClassNode sink = sinks.get(sinkIndex);
                         String name = "d" + ctx.names().next();
-                        sink.methods.add(compositeHelper(sink.name, name, shape[1], insn.getOpcode(), rnd));
+                        sink.methods.add(compositeHelper(sink.name, name, shape[1], insn.getOpcode(), rnd, opaqueState));
                         helper = new Helper(sink.name, name);
                         family.add(helper);
                         helperCount++;
@@ -165,41 +178,97 @@ public final class CrossClassDispersionTransformer implements Transformer {
         return value;
     }
 
-    private static ClassNode buildSink(String name, Random rnd) {
+    private static ClassNode buildSink(String name, Random rnd, boolean opaqueState) {
         ClassNode cn = new ClassNode();
-        cn.version = 52;
+        cn.version = opaqueState ? Opcodes.V11 : Opcodes.V1_8;
         cn.access = Opcodes.ACC_PUBLIC | Opcodes.ACC_FINAL | Opcodes.ACC_SUPER;
         cn.name = name;
         cn.superName = "java/lang/Object";
         cn.fields = new ArrayList<>();
         cn.methods = new ArrayList<>();
 
-        int fieldAccess = Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC
-                | Opcodes.ACC_SYNTHETIC | Opcodes.ACC_VOLATILE;
-        cn.fields.add(new FieldNode(Opcodes.ASM9, fieldAccess, INT_STATE, "I", null, null));
-        cn.fields.add(new FieldNode(Opcodes.ASM9, fieldAccess, LONG_STATE, "J", null, null));
+        int fieldAccess = Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC | Opcodes.ACC_SYNTHETIC
+                | (opaqueState ? Opcodes.ACC_FINAL : Opcodes.ACC_VOLATILE);
+        cn.fields.add(new FieldNode(Opcodes.ASM9, fieldAccess, INT_STATE, opaqueState ? "[I" : "I", null, null));
+        cn.fields.add(new FieldNode(Opcodes.ASM9, fieldAccess, LONG_STATE, opaqueState ? "[J" : "J", null, null));
 
         MethodNode clinit = new MethodNode(Opcodes.ASM9, Opcodes.ACC_STATIC,
                 "<clinit>", "()V", null, null);
+        if (opaqueState) {
+            initializeState(clinit.instructions, name, false);
+            initializeState(clinit.instructions, name, true);
+        }
         clinit.instructions.add(new MethodInsnNode(Opcodes.INVOKESTATIC,
                 "java/lang/System", "nanoTime", "()J", false));
         clinit.instructions.add(new InsnNode(Opcodes.DUP2));
         clinit.instructions.add(new InsnNode(Opcodes.L2I));
         clinit.instructions.add(new LdcInsnNode(rnd.nextInt()));
         clinit.instructions.add(new InsnNode(Opcodes.IXOR));
-        clinit.instructions.add(new FieldInsnNode(Opcodes.PUTSTATIC, name, INT_STATE, "I"));
+        writeInitialState(clinit.instructions, name, false, opaqueState);
         clinit.instructions.add(new LdcInsnNode(rnd.nextLong()));
         clinit.instructions.add(new InsnNode(Opcodes.LXOR));
-        clinit.instructions.add(new FieldInsnNode(Opcodes.PUTSTATIC, name, LONG_STATE, "J"));
+        writeInitialState(clinit.instructions, name, true, opaqueState);
         clinit.instructions.add(new InsnNode(Opcodes.RETURN));
-        clinit.maxLocals = 0;
-        clinit.maxStack = 4;
+        clinit.maxLocals = opaqueState ? 2 : 0;
+        clinit.maxStack = opaqueState ? 6 : 4;
         cn.methods.add(clinit);
         return cn;
     }
 
+    private static void initializeState(InsnList il, String owner, boolean wide) {
+        String array = wide ? "[J" : "[I";
+        il.add(new InsnNode(Opcodes.ICONST_1));
+        il.add(new IntInsnNode(Opcodes.NEWARRAY, wide ? Opcodes.T_LONG : Opcodes.T_INT));
+        il.add(new FieldInsnNode(Opcodes.PUTSTATIC, owner, wide ? LONG_STATE : INT_STATE, array));
+    }
+
+    private static void writeInitialState(InsnList il, String owner, boolean wide, boolean opaque) {
+        if (!opaque) {
+            writeState(il, owner, wide, false, 0);
+            return;
+        }
+        il.add(new VarInsnNode(wide ? Opcodes.LSTORE : Opcodes.ISTORE, 0));
+        il.add(new FieldInsnNode(Opcodes.GETSTATIC, owner, wide ? LONG_STATE : INT_STATE,
+                wide ? "[J" : "[I"));
+        il.add(new InsnNode(Opcodes.ICONST_0));
+        il.add(new VarInsnNode(wide ? Opcodes.LLOAD : Opcodes.ILOAD, 0));
+        il.add(new InsnNode(wide ? Opcodes.LASTORE : Opcodes.IASTORE));
+    }
+
+    private static void stateAddress(InsnList il, String owner, boolean wide) {
+        il.add(new LdcInsnNode(new ConstantDynamic(wide ? "j" : "i", "L" + VAR_HANDLE + ";",
+                HANDLE_BOOTSTRAP, ARRAY_HANDLE_FACTORY, Type.getType(wide ? "[J" : "[I"))));
+        il.add(new FieldInsnNode(Opcodes.GETSTATIC, owner, wide ? LONG_STATE : INT_STATE,
+                wide ? "[J" : "[I"));
+        il.add(new InsnNode(Opcodes.ICONST_0));
+    }
+
+    private static void readState(InsnList il, String owner, boolean wide, boolean opaque) {
+        if (opaque) {
+            stateAddress(il, owner, wide);
+            il.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL, VAR_HANDLE, "getOpaque",
+                    wide ? "([JI)J" : "([II)I", false));
+        } else {
+            il.add(new FieldInsnNode(Opcodes.GETSTATIC, owner, wide ? LONG_STATE : INT_STATE,
+                    wide ? "J" : "I"));
+        }
+    }
+
+    private static void writeState(InsnList il, String owner, boolean wide, boolean opaque, int local) {
+        if (opaque) {
+            il.add(new VarInsnNode(wide ? Opcodes.LSTORE : Opcodes.ISTORE, local));
+            stateAddress(il, owner, wide);
+            il.add(new VarInsnNode(wide ? Opcodes.LLOAD : Opcodes.ILOAD, local));
+            il.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL, VAR_HANDLE, "setOpaque",
+                    wide ? "([JIJ)V" : "([III)V", false));
+        } else {
+            il.add(new FieldInsnNode(Opcodes.PUTSTATIC, owner, wide ? LONG_STATE : INT_STATE,
+                    wide ? "J" : "I"));
+        }
+    }
+
     private static MethodNode compositeHelper(String owner, String name, String desc,
-                                              int opcode, Random rnd) {
+                                              int opcode, Random rnd, boolean opaqueState) {
         boolean wide = desc.equals("(JJ)J");
         MethodNode mn = new MethodNode(Opcodes.ASM9, Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC,
                 name, desc, null, null);
@@ -215,7 +284,7 @@ public final class CrossClassDispersionTransformer implements Transformer {
             il.add(new InsnNode(opcode));
             il.add(new VarInsnNode(Opcodes.LSTORE, 4));
 
-            il.add(new FieldInsnNode(Opcodes.GETSTATIC, owner, LONG_STATE, "J"));
+            readState(il, owner, true, opaqueState);
             il.add(new VarInsnNode(Opcodes.LSTORE, 6));
             il.add(new VarInsnNode(Opcodes.LLOAD, 6));
             il.add(new VarInsnNode(Opcodes.LLOAD, 4));
@@ -223,7 +292,7 @@ public final class CrossClassDispersionTransformer implements Transformer {
             il.add(new LdcInsnNode(rotation));
             il.add(new MethodInsnNode(Opcodes.INVOKESTATIC, "java/lang/Long",
                     "rotateLeft", "(JI)J", false));
-            il.add(new FieldInsnNode(Opcodes.PUTSTATIC, owner, LONG_STATE, "J"));
+            writeState(il, owner, true, opaqueState, 8);
 
             il.add(new VarInsnNode(Opcodes.LLOAD, 4));
             il.add(new VarInsnNode(Opcodes.LLOAD, 6));
@@ -245,8 +314,8 @@ public final class CrossClassDispersionTransformer implements Transformer {
             il.add(new LdcInsnNode(mask));
             il.add(new InsnNode(Opcodes.LXOR));
             il.add(new InsnNode(Opcodes.LRETURN));
-            mn.maxLocals = 8;
-            mn.maxStack = 4;
+            mn.maxLocals = opaqueState ? 10 : 8;
+            mn.maxStack = opaqueState ? 5 : 4;
         } else {
             int mask = rnd.nextInt();
             int delta = rnd.nextInt();
@@ -257,7 +326,7 @@ public final class CrossClassDispersionTransformer implements Transformer {
             il.add(new InsnNode(opcode));
             il.add(new VarInsnNode(Opcodes.ISTORE, 2));
 
-            il.add(new FieldInsnNode(Opcodes.GETSTATIC, owner, INT_STATE, "I"));
+            readState(il, owner, false, opaqueState);
             il.add(new VarInsnNode(Opcodes.ISTORE, 3));
             il.add(new VarInsnNode(Opcodes.ILOAD, 3));
             il.add(new VarInsnNode(Opcodes.ILOAD, 2));
@@ -265,7 +334,7 @@ public final class CrossClassDispersionTransformer implements Transformer {
             il.add(new LdcInsnNode(rotation));
             il.add(new MethodInsnNode(Opcodes.INVOKESTATIC, "java/lang/Integer",
                     "rotateLeft", "(II)I", false));
-            il.add(new FieldInsnNode(Opcodes.PUTSTATIC, owner, INT_STATE, "I"));
+            writeState(il, owner, false, opaqueState, 4);
 
             il.add(new VarInsnNode(Opcodes.ILOAD, 2));
             il.add(new VarInsnNode(Opcodes.ILOAD, 3));
@@ -287,8 +356,8 @@ public final class CrossClassDispersionTransformer implements Transformer {
             il.add(new LdcInsnNode(mask));
             il.add(new InsnNode(Opcodes.IXOR));
             il.add(new InsnNode(Opcodes.IRETURN));
-            mn.maxLocals = 4;
-            mn.maxStack = 3;
+            mn.maxLocals = opaqueState ? 5 : 4;
+            mn.maxStack = opaqueState ? 4 : 3;
         }
         return mn;
     }

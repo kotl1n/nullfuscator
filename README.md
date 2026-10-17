@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/kotl1n/nullfuscator"><img src="https://img.shields.io/badge/version-0.2.4-blue.svg" alt="Version"></a>
+  <a href="https://github.com/kotl1n/nullfuscator"><img src="https://img.shields.io/badge/version-0.2.5-blue.svg" alt="Version"></a>
   <a href="https://github.com/kotl1n/nullfuscator"><img src="https://img.shields.io/badge/java-17%2B-orange.svg" alt="Java 17+"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
   <a href="https://github.com/kotl1n/nullfuscator"><img src="https://img.shields.io/badge/build-offline%20%2F%20reproducible-brightgreen.svg" alt="Build Status"></a>
@@ -21,9 +21,11 @@
 
 **NULLFUSCATOR** is a standalone, deterministic Java bytecode obfuscator built on the OW2 ASM engine. Designed for modern JVM workloads (supporting Java 17 through Java 21+), NULLFUSCATOR significantly raises the cost of static reverse engineering, automated decompilation, runtime debugging, and code tampering.
 
-### 0.2.4
+### 0.2.5
 
-This release fixes access and dispatch regressions during class renaming, method movement and field packing. Class renaming now preserves private-member behavior and package boundaries that remain externally visible. The default command uses the `light` profile, and `--dry-run` performs the same archive-size validation as a normal run without leaving output files behind. The release was rechecked with verifier and differential tests across shipped profiles, Java 17/21 class files, mappings, enum and record metadata, Fabric/Mixin, ServiceLoader and package-access fixtures.
+This release reduces runtime overhead in cross-class dispersion by replacing full volatile-store fences on private generated state with opaque VarHandle access. In three interleaved, checksum-verified runs with one million warmup rounds and one million measured rounds, median kernel time fell by **24.6% for strong** and **50.6% for full**. Profile percentages, encryption layers, dispersed operations, helper counts and protected-call coverage stayed unchanged on the fixture.
+
+The improvement trades memory and archive size for speed: full peak process RSS rose from 101.30 to 137.38 MiB and its JAR grew by 2.5%. Archives containing only pre-Java-11 classes keep the previous implementation; `crossClassDispersion.opaqueState = false` restores it for other archives. See [the measurements and validation details](docs/PERFORMANCE.md). These fixture results do not predict application performance or establish identical reverse-engineering resistance.
 
 Unlike conventional obfuscators that merely rename symbols or recklessly bloat bytecode to the point of runtime instability, NULLFUSCATOR provides:
 - **Strict budget gates and bounded growth**: Enforces hard caps on instruction expansion, method size limits, and archive growth to eliminate `MethodTooLargeException` and avoid runaway memory leaks.
@@ -158,6 +160,10 @@ For comparisons between builds, use `python3 scripts/benchmark.py --jar /path/to
 
 Runtime guards and exception-return dispatch target input methods, including semantic bridges and input synthetic methods. Generated arithmetic helpers are not wrapped again for each operation. Exception returns use a shared stackless token and a method-local result, preserving raw floating-point bits and concurrent/reentrant calls without `ThreadLocal` traffic. Field indirection emits only accessors that are actually used; output archives use maximum DEFLATE compression. These changes retain configured input-method coverage but reduce redundant helper layering; equal resistance to reverse engineering is not established by runtime tests.
 
+Cross-class dispersion now uses opaque reads/writes for its private mutable state when the archive already contains Java 11+ classes. This preserves state updates and arithmetic masking while avoiding a full volatile-store fence per operation; application volatile fields are unaffected. Older archives keep the previous implementation. Set `crossClassDispersion.opaqueState = false` to restore the previous state access. See [the latest measurements and memory tradeoff](docs/PERFORMANCE.md).
+
+For longer warmup and measurement loops, use `python3 scripts/benchmark.py --runs 3 --profiles strong full --warmup-rounds 1000000 --rounds 1000000`. The report records both iteration counts.
+
 The measurements below were recorded for 0.2.2-beta on Linux x86_64 with OpenJDK 21.0.12.1. The input archive is 6.98 KiB. They are medians from five runs on the same fixture; they are not a comparison with other obfuscators or a prediction for an application workload.
 
 | Profile | Obfuscation | Obfuscator RSS | Output | Semantic Core Methods | Process Launch | Kernel Loop | Process RSS |
@@ -251,7 +257,7 @@ nullfuscator <input.jar> [output.jar] [options]
 | `--verbose` | `-v` | — | Enables detailed stderr diagnostics for every transformation pass. |
 | `--quiet` | `-q` | — | Suppresses non-essential informational output. |
 | `--no-color` | — | — | Disables ANSI terminal coloring. |
-| `--version` | `-V` | — | Prints NULLFUSCATOR version (`0.2.4`). |
+| `--version` | `-V` | — | Prints NULLFUSCATOR version (`0.2.5`). |
 | `--help` | `-h` | — | Displays command-line help summary. |
 
 ### Commands
@@ -296,7 +302,7 @@ Integrate NULLFUSCATOR directly into your Gradle build pipeline:
 ```groovy
 task obfuscate(type: JavaExec) {
     dependsOn jar
-    classpath = files('tools/nullfuscator-0.2.4.jar')
+    classpath = files('tools/nullfuscator-0.2.5.jar')
     mainClass = 'com.nullfuscator.obf.core.Main'
 
     args = [

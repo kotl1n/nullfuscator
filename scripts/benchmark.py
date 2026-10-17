@@ -46,7 +46,7 @@ def median(values):
     return statistics.median(values)
 
 
-def write_fixture(directory):
+def write_fixture(directory, warmup_rounds=20_000, rounds=100_000):
     methods = []
     calls = []
     for number in range(8):
@@ -71,9 +71,9 @@ def write_fixture(directory):
         return value;
     }}
     public static void main(String[] args) {{
-        run(20_000);
+        run({warmup_rounds});
         long start = System.nanoTime();
-        int value = run(100_000);
+        int value = run({rounds});
         long elapsed = System.nanoTime() - start;
         System.out.println(value + " " + elapsed);
     }}
@@ -104,7 +104,13 @@ def main():
     parser.add_argument("--jar", type=Path, default=JAR)
     parser.add_argument("--runs", type=int, default=RUNS)
     parser.add_argument("--profiles", nargs="+", choices=PROFILES, default=PROFILES)
+    parser.add_argument("--warmup-rounds", type=int, default=20_000,
+                        help="kernel rounds before timing in each fresh JVM")
+    parser.add_argument("--rounds", type=int, default=100_000,
+                        help="kernel rounds measured in each fresh JVM")
     args = parser.parse_args()
+    if args.warmup_rounds < 0 or args.rounds < 1:
+        parser.error("--warmup-rounds must be nonnegative and --rounds must be positive")
     if args.runs < 1:
         parser.error("--runs must be positive")
     JAR, RUNS, PROFILES = args.jar.resolve(), args.runs, args.profiles
@@ -114,11 +120,12 @@ def main():
         run(["python3", ROOT / "scripts/build.py"])
     with tempfile.TemporaryDirectory(prefix="nullfuscator-benchmark-") as raw:
         work = Path(raw)
-        write_fixture(work)
+        write_fixture(work, args.warmup_rounds, args.rounds)
         run(["javac", "--release", "17", "BenchKernel.java", "BenchMain.java"], work)
         input_jar = work / "input.jar"
         run(["jar", "--create", "--file", input_jar, "--main-class", "BenchMain", "BenchKernel.class", "BenchMain.class"], work)
-        results = {"environment": {"java": run(["java", "-version"]).stderr.splitlines()[0], "runs": RUNS},
+        results = {"environment": {"java": run(["java", "-version"]).stderr.splitlines()[0], "runs": RUNS,
+                                    "warmup_rounds": args.warmup_rounds, "rounds": args.rounds},
                    "input_bytes": input_jar.stat().st_size,
                    "baseline": runtime_samples(input_jar), "profiles": {}}
         for profile in PROFILES:
