@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/kotl1n/nullfuscator"><img src="https://img.shields.io/badge/version-0.2.5-blue.svg" alt="Version"></a>
+  <a href="https://github.com/kotl1n/nullfuscator"><img src="https://img.shields.io/badge/version-0.2.6-blue.svg" alt="Version"></a>
   <a href="https://github.com/kotl1n/nullfuscator"><img src="https://img.shields.io/badge/java-17%2B-orange.svg" alt="Java 17+"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
   <a href="https://github.com/kotl1n/nullfuscator"><img src="https://img.shields.io/badge/build-offline%20%2F%20reproducible-brightgreen.svg" alt="Build Status"></a>
@@ -20,6 +20,10 @@
 ## Overview
 
 **NULLFUSCATOR** is a standalone, deterministic Java bytecode obfuscator built on the OW2 ASM engine. Designed for modern JVM workloads (supporting Java 17 through Java 21+), NULLFUSCATOR significantly raises the cost of static reverse engineering, automated decompilation, runtime debugging, and code tampering.
+
+### 0.2.6
+
+This release hardens the experimental `antiAI` pass. Each Feistel helper now draws its round function from a pool of distinct flavors, so no single inverse template recovers every call site. A configurable share of integer sites (`decoyBranchPercent`) is wrapped in a runtime-dead branch carrying a plausibly-wrong value behind a data-dependent opaque-false guard `((s & m) + (s | m)) - (s + m)`, which is `0` for every int. Behavior, `-Xverify:all` verification and growth budgets are unchanged; the 10,800-value differential regression and the full pipeline continue to pass. This raises automated static-analysis cost and makes no AI-proof claim.
 
 ### 0.2.5
 
@@ -96,7 +100,7 @@ NULLFUSCATOR has 31 configurable transformation passes organized into focused de
 | | `exceptionReturn` | Replaces standard typed returns with caught control-flow exception dispatch. |
 | **Encryption** | `stringEncryption` | Encrypts string literals using per-site rolling XOR keys with polymorphic runtime decoders. |
 | | `numberEncryption` | Converts numeric constants into dynamic algebraic identities and runtime helpers. |
-| | `antiAI` *(Experimental)* | Links constants through keyed Feistel permutation networks to disrupt LLM heuristics. |
+| | `antiAI` *(Experimental)* | Links constants through keyed Feistel networks with per-helper round-function diversity, and wraps a share of sites in opaque-false decoy branches carrying plausibly-wrong values, to raise automated-analysis cost. |
 | **Structural** | `referenceHiding` | Replaces direct `INVOKEVIRTUAL` / `INVOKESTATIC` calls with encrypted `invokedynamic` instructions. |
 | **Semantic** | `semanticCore` *(Experimental)* | Keeps eligible integer methods in a method-specific encoded domain from entry to return. |
 | | `fieldIndirection` | Routes direct field reads/writes through generated bridge methods. |
@@ -257,7 +261,7 @@ nullfuscator <input.jar> [output.jar] [options]
 | `--verbose` | `-v` | — | Enables detailed stderr diagnostics for every transformation pass. |
 | `--quiet` | `-q` | — | Suppresses non-essential informational output. |
 | `--no-color` | — | — | Disables ANSI terminal coloring. |
-| `--version` | `-V` | — | Prints NULLFUSCATOR version (`0.2.5`). |
+| `--version` | `-V` | — | Prints NULLFUSCATOR version (`0.2.6`). |
 | `--help` | `-h` | — | Displays command-line help summary. |
 
 ### Commands
@@ -302,7 +306,7 @@ Integrate NULLFUSCATOR directly into your Gradle build pipeline:
 ```groovy
 task obfuscate(type: JavaExec) {
     dependsOn jar
-    classpath = files('tools/nullfuscator-0.2.5.jar')
+    classpath = files('tools/nullfuscator-0.2.6.jar')
     mainClass = 'com.nullfuscator.obf.core.Main'
 
     args = [

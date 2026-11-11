@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.6
+
+- antiAI L1: gave each Feistel helper a distinct round-function flavor (rotate/multiply, multiply-xor-shift, mixed boolean-arithmetic, rotate-xor) so no single inverse template recovers every site. Invertibility is preserved for any round function; the compile-time and emitted forms mirror each other bit-for-bit.
+- antiAI L4: added `decoyBranchPercent` — a share of encoded integer sites is wrapped in a runtime-dead branch that assigns a plausibly-wrong value behind a data-dependent opaque-false guard `((s&m)+(s|m))-(s+m)`, which is `0` for every int. The real value always wins; nothing is discarded, so the decoy is not trivially-dead code.
+- Kept defaults off the hot path and within existing growth budgets; extended AntiAiRegression to exercise all round-function flavors and to assert decoy branches are emitted. The full 10,800-value differential suite and JVM verification continue to pass.
+
 ## 0.2.5
 
 - Reduced cross-class dispersion runtime costs with opaque VarHandle access to private generated state on archives already containing Java 11+ classes. Each helper retains its state reads, updates and arithmetic masking.

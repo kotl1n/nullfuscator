@@ -12,6 +12,7 @@ public final class AntiAiRegression implements Opcodes {
 
     public static void main(String[] args) throws Exception {
         int checks = 0;
+        boolean sawDecoyBranch = false;
 
         for (int seed = 0; seed < 30; seed++) {
             for (int level = 1; level <= 3; level++) {
@@ -74,6 +75,9 @@ public final class AntiAiRegression implements Opcodes {
                 for (MethodNode mn : cn.methods) {
                     for (AbstractInsnNode insn : mn.instructions) {
                         GrowthRegression.check(insn.getOpcode() != POP, "discarded helper result");
+                        if (insn instanceof JumpInsnNode) {
+                            sawDecoyBranch = true;
+                        }
                     }
                 }
 
@@ -85,7 +89,6 @@ public final class AntiAiRegression implements Opcodes {
                     checks++;
                 }
 
-                // Replacing the deepest helper by identity must change a real result.
                 MethodNode helper = cn.methods.get(cn.methods.size() - 1);
                 helper.instructions.clear();
                 helper.instructions.add(new VarInsnNode(ILOAD, 0));
@@ -99,7 +102,10 @@ public final class AntiAiRegression implements Opcodes {
             }
         }
 
+        GrowthRegression.check(sawDecoyBranch, "L4 decoy branches were never emitted");
+
         System.out.println("PASS antiAI: " + checks + " differential values, 30 seeds, "
-                + "levels 1-3, Java 8 classes / Java 17 interfaces, live-helper mutation");
+                + "levels 1-3, Java 8 classes / Java 17 interfaces, live-helper mutation, "
+                + "MBA flavor diversity, decoy branches");
     }
 }

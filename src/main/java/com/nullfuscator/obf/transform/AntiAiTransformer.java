@@ -8,6 +8,8 @@ import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.InsnList;
 import org.objectweb.asm.tree.InsnNode;
 import org.objectweb.asm.tree.IntInsnNode;
+import org.objectweb.asm.tree.JumpInsnNode;
+import org.objectweb.asm.tree.LabelNode;
 import org.objectweb.asm.tree.LdcInsnNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
@@ -17,13 +19,6 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Set;
 
-/**
- * Anti-AI bytecode transformation pass.
- *
- * NOTE / ВНИМАНИЕ:
- * antiAI является экспериментальной (тестовой) функцией и может работать не так, как задумано.
- * antiAI is an experimental / test feature and may not work as intended.
- */
 public final class AntiAiTransformer implements Transformer {
 
     @Override
@@ -41,19 +36,21 @@ public final class AntiAiTransformer implements Transformer {
         ctx.initializePolicies();
         var sec = ctx.config().section(id());
         int level = clamp(sec.getInt("level", 1), 1, 3);
-        // Keep the legacy option, but spend its budget on useful dependencies.
+
         int helpers = clamp(sec.getInt("decoyMethods", 4), 0, 32);
         helpers = Math.min(32, Math.max(2, helpers + (level - 1) * 2));
         int pct = clamp(sec.getInt("constantEncodingPercent", 50), 0, 100);
 
+        int decoyPct = clamp(sec.getInt("decoyBranchPercent", level >= 2 ? 30 : 15), 0, 100);
+
         int encoded = 0;
         int added = 0;
+        int decoys = 0;
         for (ClassNode cn : ctx.targets(id())) {
             if (pct == 0 || ctx.isHotClass(cn) || com.nullfuscator.obf.core.Limits.hugeClass(cn)) {
                 continue;
             }
-            // Private static interface methods require Java 9. Older interfaces
-            // are left alone rather than growing their public API.
+
             if ((cn.access & Opcodes.ACC_INTERFACE) != 0 && cn.version < Opcodes.V9) {
                 continue;
             }
@@ -70,6 +67,7 @@ public final class AntiAiTransformer implements Transformer {
                     continue;
                 }
 
+                int scratch = freeSlot(mn);
                 for (AbstractInsnNode insn : mn.instructions.toArray()) {
                     if (com.nullfuscator.obf.core.Limits.oversizeMethod(mn)) {
                         break;
@@ -90,7 +88,13 @@ public final class AntiAiTransformer implements Transformer {
 
                     InsnList repl = new InsnList();
                     if (integer) {
-                        network.decode(repl, intValueOf(insn));
+                        int cst = intValueOf(insn);
+                        if (decoyPct > 0 && ctx.random().nextInt(100) < decoyPct) {
+                            emitDecoyInteger(repl, network, cst, scratch, ctx);
+                            decoys++;
+                        } else {
+                            network.decode(repl, cst);
+                        }
                     } else {
                         long value = longValueOf(insn);
                         network.decode(repl, (int) (value >>> 32));
@@ -112,15 +116,64 @@ public final class AntiAiTransformer implements Transformer {
         }
 
         ctx.clearEncodedNumbers();
-        ctx.log().debug("antiAI: liveHelpers=" + added + " encodedConsts=" + encoded);
+        ctx.log().debug("antiAI: liveHelpers=" + added + " encodedConsts=" + encoded
+                + " decoyBranches=" + decoys);
+    }
+
+    private static int freeSlot(MethodNode mn) {
+        int slots = org.objectweb.asm.Type.getArgumentsAndReturnSizes(mn.desc) >> 2;
+        if ((mn.access & Opcodes.ACC_STATIC) != 0) {
+            slots -= 1;
+        }
+        for (AbstractInsnNode insn : mn.instructions) {
+            if (insn instanceof VarInsnNode v) {
+                int op = v.getOpcode();
+                int width = (op == Opcodes.LLOAD || op == Opcodes.LSTORE
+                        || op == Opcodes.DLOAD || op == Opcodes.DSTORE) ? 2 : 1;
+                slots = Math.max(slots, v.var + width);
+            }
+        }
+        return Math.max(slots, mn.maxLocals);
+    }
+
+    private static void emitDecoyInteger(InsnList repl, Network net, int value,
+                                         int slot, ObfContext ctx) {
+        LabelNode cont = new LabelNode();
+        int m = ctx.random().nextInt();
+
+        net.decode(repl, value);
+        repl.add(new VarInsnNode(Opcodes.ISTORE, slot));
+
+        repl.add(new VarInsnNode(Opcodes.ILOAD, slot));
+        pushInt(repl, m);
+        repl.add(new InsnNode(Opcodes.IAND));
+        repl.add(new VarInsnNode(Opcodes.ILOAD, slot));
+        pushInt(repl, m);
+        repl.add(new InsnNode(Opcodes.IOR));
+        repl.add(new InsnNode(Opcodes.IADD));
+        repl.add(new VarInsnNode(Opcodes.ILOAD, slot));
+        pushInt(repl, m);
+        repl.add(new InsnNode(Opcodes.IADD));
+        repl.add(new InsnNode(Opcodes.ISUB));
+        repl.add(new JumpInsnNode(Opcodes.IFEQ, cont));
+
+        int decoy = value ^ (1 + ctx.random().nextInt(0x3fffffff));
+        net.decode(repl, decoy);
+        repl.add(new VarInsnNode(Opcodes.ISTORE, slot));
+
+        repl.add(cont);
+        repl.add(new VarInsnNode(Opcodes.ILOAD, slot));
     }
 
     private static final class Network {
+
+        static final int FLAVORS = 4;
 
         final ClassNode owner;
         final ObfContext ctx;
         final String[] names;
         final int[][] keys;
+        final int[] flavor;
         boolean used;
 
         Network(ClassNode owner, int count, ObfContext ctx) {
@@ -128,6 +181,7 @@ public final class AntiAiTransformer implements Transformer {
             this.ctx = ctx;
             names = new String[count];
             keys = new int[count][6];
+            flavor = new int[count];
 
             Set<String> existing = new HashSet<>();
             for (MethodNode m : owner.methods) {
@@ -140,6 +194,7 @@ public final class AntiAiTransformer implements Transformer {
                 for (int j = 0; j < 6; j++) {
                     keys[i][j] = ctx.random().nextInt();
                 }
+                flavor[i] = ctx.random().nextInt(FLAVORS);
             }
         }
 
@@ -152,7 +207,9 @@ public final class AntiAiTransformer implements Transformer {
                 for (int round = 1; round >= 0; round--) {
                     int left = encoded >>> 16;
                     int right = encoded & 65535;
-                    int oldLeft = right ^ mix(left, keys[i], round);
+                    int k = round * 3;
+                    int oldLeft = right ^ mix(flavor[i], left,
+                            keys[i][k], keys[i][k + 1], keys[i][k + 2]);
                     encoded = (oldLeft << 16) | left;
                 }
             }
@@ -162,10 +219,68 @@ public final class AntiAiTransformer implements Transformer {
                     names[stage], "(I)I", (owner.access & Opcodes.ACC_INTERFACE) != 0));
         }
 
-        static int mix(int value, int[] key, int round) {
-            int k = round * 3;
-            return Integer.rotateLeft((value ^ key[k]) * (key[k + 1] | 1),
-                    1 + (key[k + 2] & 15)) & 65535;
+        static int mix(int flavor, int v, int k0, int k1, int k2) {
+            int r;
+            switch (flavor) {
+                case 1:  r = ((v * (k0 | 1)) ^ (v >>> 5)) + k1; break;
+                case 2:  r = ((v ^ k0) * 3) + ((v & k1) * 5) + k2; break;
+                case 3:  r = Integer.rotateLeft(v, 3) ^ (v * (k0 | 1)) ^ k1; break;
+                default: r = Integer.rotateLeft((v ^ k0) * (k1 | 1), 1 + (k2 & 15)); break;
+            }
+            return r & 65535;
+        }
+
+        static void emitMix(int flavor, InsnList il, int k0, int k1, int k2) {
+            switch (flavor) {
+                case 1:
+                    il.add(new VarInsnNode(Opcodes.ILOAD, 1));
+                    pushInt(il, k0 | 1);
+                    il.add(new InsnNode(Opcodes.IMUL));
+                    il.add(new VarInsnNode(Opcodes.ILOAD, 1));
+                    pushInt(il, 5);
+                    il.add(new InsnNode(Opcodes.IUSHR));
+                    il.add(new InsnNode(Opcodes.IXOR));
+                    pushInt(il, k1);
+                    il.add(new InsnNode(Opcodes.IADD));
+                    break;
+                case 2:
+                    il.add(new VarInsnNode(Opcodes.ILOAD, 1));
+                    pushInt(il, k0);
+                    il.add(new InsnNode(Opcodes.IXOR));
+                    pushInt(il, 3);
+                    il.add(new InsnNode(Opcodes.IMUL));
+                    il.add(new VarInsnNode(Opcodes.ILOAD, 1));
+                    pushInt(il, k1);
+                    il.add(new InsnNode(Opcodes.IAND));
+                    pushInt(il, 5);
+                    il.add(new InsnNode(Opcodes.IMUL));
+                    il.add(new InsnNode(Opcodes.IADD));
+                    pushInt(il, k2);
+                    il.add(new InsnNode(Opcodes.IADD));
+                    break;
+                case 3:
+                    il.add(new VarInsnNode(Opcodes.ILOAD, 1));
+                    pushInt(il, 3);
+                    il.add(new MethodInsnNode(Opcodes.INVOKESTATIC, "java/lang/Integer",
+                            "rotateLeft", "(II)I", false));
+                    il.add(new VarInsnNode(Opcodes.ILOAD, 1));
+                    pushInt(il, k0 | 1);
+                    il.add(new InsnNode(Opcodes.IMUL));
+                    il.add(new InsnNode(Opcodes.IXOR));
+                    pushInt(il, k1);
+                    il.add(new InsnNode(Opcodes.IXOR));
+                    break;
+                default:
+                    il.add(new VarInsnNode(Opcodes.ILOAD, 1));
+                    pushInt(il, k0);
+                    il.add(new InsnNode(Opcodes.IXOR));
+                    pushInt(il, k1 | 1);
+                    il.add(new InsnNode(Opcodes.IMUL));
+                    pushInt(il, 1 + (k2 & 15));
+                    il.add(new MethodInsnNode(Opcodes.INVOKESTATIC, "java/lang/Integer",
+                            "rotateLeft", "(II)I", false));
+                    break;
+            }
         }
 
         int emit() {
@@ -194,16 +309,7 @@ public final class AntiAiTransformer implements Transformer {
                     pushInt(il, 16);
                     il.add(new InsnNode(Opcodes.IUSHR));
 
-                    il.add(new VarInsnNode(Opcodes.ILOAD, 1));
-                    pushInt(il, keys[i][k]);
-                    il.add(new InsnNode(Opcodes.IXOR));
-
-                    pushInt(il, keys[i][k + 1] | 1);
-                    il.add(new InsnNode(Opcodes.IMUL));
-
-                    pushInt(il, 1 + (keys[i][k + 2] & 15));
-                    il.add(new MethodInsnNode(Opcodes.INVOKESTATIC, "java/lang/Integer",
-                            "rotateLeft", "(II)I", false));
+                    emitMix(flavor[i], il, keys[i][k], keys[i][k + 1], keys[i][k + 2]);
 
                     pushInt(il, 65535);
                     il.add(new InsnNode(Opcodes.IAND));
@@ -220,7 +326,7 @@ public final class AntiAiTransformer implements Transformer {
                 il.add(new InsnNode(Opcodes.IRETURN));
 
                 mn.maxLocals = 2;
-                mn.maxStack = 5;
+                mn.maxStack = 6;
                 owner.methods.add(mn);
             }
             return names.length;
