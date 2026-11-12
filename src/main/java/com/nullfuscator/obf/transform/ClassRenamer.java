@@ -141,6 +141,7 @@ public final class ClassRenamer implements Transformer {
         sanitizeInnerClassLabels(ctx, classMap, gen, depth);
         rewriteManifestEntrypoints(ctx, classMap);
         rewriteServiceDescriptors(ctx, classMap);
+        rewritePluginDescriptors(ctx, classMap);
 
         ctx.log().debug("classRenamer renamed " + classMap.size() + " classes");
     }
@@ -276,5 +277,144 @@ public final class ClassRenamer implements Transformer {
 
     private static String packagePrefix(String name) {
         return name.substring(0, name.lastIndexOf('/') + 1);
+    }
+
+    private static void rewritePluginDescriptors(ObfContext ctx, Map<String, String> classMap) {
+        if (classMap.isEmpty()) {
+            return;
+        }
+
+        for (Map.Entry<String, byte[]> entry : ctx.resources().entrySet()) {
+            String path = entry.getKey();
+            if (path == null) {
+                continue;
+            }
+
+            if (isYamlPluginDescriptor(path)) {
+                byte[] data = entry.getValue();
+                byte[] updated = rewriteYamlDescriptor(data, classMap);
+                if (updated != null) {
+                    entry.setValue(updated);
+                    ctx.log().debug("classRenamer updated plugin descriptor: " + path);
+                }
+            } else if (isJsonPluginDescriptor(path)) {
+                byte[] data = entry.getValue();
+                byte[] updated = rewriteJsonDescriptor(data, classMap);
+                if (updated != null) {
+                    entry.setValue(updated);
+                    ctx.log().debug("classRenamer updated plugin descriptor: " + path);
+                }
+            }
+        }
+    }
+
+    private static boolean isYamlPluginDescriptor(String path) {
+        return path.equals("plugin.yml") || path.endsWith("/plugin.yml")
+                || path.equals("paper-plugin.yml") || path.endsWith("/paper-plugin.yml")
+                || path.equals("bungee.yml") || path.endsWith("/bungee.yml");
+    }
+
+    private static boolean isJsonPluginDescriptor(String path) {
+        return path.equals("velocity-plugin.json") || path.endsWith("/velocity-plugin.json");
+    }
+
+    private static byte[] rewriteYamlDescriptor(byte[] data, Map<String, String> classMap) {
+        String text = new String(data, StandardCharsets.UTF_8);
+        String[] lines = text.split("\n", -1);
+        boolean modified = false;
+        StringBuilder sb = new StringBuilder(text.length());
+
+        for (int i = 0; i < lines.length; i++) {
+            String line = lines[i];
+            String rewrittenLine = remapYamlLine(line, classMap);
+            if (!rewrittenLine.equals(line)) {
+                modified = true;
+                line = rewrittenLine;
+            }
+            sb.append(line);
+            if (i + 1 < lines.length) {
+                sb.append('\n');
+            }
+        }
+
+        return modified ? sb.toString().getBytes(StandardCharsets.UTF_8) : null;
+    }
+
+    private static String remapYamlLine(String line, Map<String, String> classMap) {
+        int hash = line.indexOf('#');
+        String content = hash >= 0 ? line.substring(0, hash) : line;
+        String comment = hash >= 0 ? line.substring(hash) : "";
+
+        int colon = content.indexOf(':');
+        if (colon >= 0) {
+            String key = content.substring(0, colon + 1);
+            String val = content.substring(colon + 1);
+            String trimmedVal = val.trim();
+            if (!trimmedVal.isEmpty()) {
+                char quote = 0;
+                String rawVal = trimmedVal;
+                if ((rawVal.startsWith("\"") && rawVal.endsWith("\"") && rawVal.length() >= 2)
+                        || (rawVal.startsWith("'") && rawVal.endsWith("'") && rawVal.length() >= 2)) {
+                    quote = rawVal.charAt(0);
+                    rawVal = rawVal.substring(1, rawVal.length() - 1);
+                }
+                String internal = rawVal.replace('.', '/');
+                String mapped = classMap.get(internal);
+                if (mapped != null) {
+                    String newDotted = mapped.replace('/', '.');
+                    String newQuotedVal = quote != 0 ? ("" + quote + newDotted + quote) : newDotted;
+                    int valStart = val.indexOf(trimmedVal);
+                    String prefix = val.substring(0, valStart);
+                    String suffix = val.substring(valStart + trimmedVal.length());
+                    return key + prefix + newQuotedVal + suffix + comment;
+                }
+            }
+            return line;
+        }
+
+        int dash = content.indexOf('-');
+        if (dash >= 0) {
+            String prefix = content.substring(0, dash + 1);
+            String val = content.substring(dash + 1);
+            String trimmedVal = val.trim();
+            if (!trimmedVal.isEmpty()) {
+                char quote = 0;
+                String rawVal = trimmedVal;
+                if ((rawVal.startsWith("\"") && rawVal.endsWith("\"") && rawVal.length() >= 2)
+                        || (rawVal.startsWith("'") && rawVal.endsWith("'") && rawVal.length() >= 2)) {
+                    quote = rawVal.charAt(0);
+                    rawVal = rawVal.substring(1, rawVal.length() - 1);
+                }
+                String internal = rawVal.replace('.', '/');
+                String mapped = classMap.get(internal);
+                if (mapped != null) {
+                    String newDotted = mapped.replace('/', '.');
+                    String newQuotedVal = quote != 0 ? ("" + quote + newDotted + quote) : newDotted;
+                    int valStart = val.indexOf(trimmedVal);
+                    String vPrefix = val.substring(0, valStart);
+                    String suffix = val.substring(valStart + trimmedVal.length());
+                    return prefix + vPrefix + newQuotedVal + suffix + comment;
+                }
+            }
+        }
+
+        return line;
+    }
+
+    private static byte[] rewriteJsonDescriptor(byte[] data, Map<String, String> classMap) {
+        String text = new String(data, StandardCharsets.UTF_8);
+        boolean modified = false;
+
+        for (Map.Entry<String, String> e : classMap.entrySet()) {
+            String origDotted = e.getKey().replace('/', '.');
+            String newDotted = e.getValue().replace('/', '.');
+            String target = "\"" + origDotted + "\"";
+            if (text.contains(target)) {
+                text = text.replace(target, "\"" + newDotted + "\"");
+                modified = true;
+            }
+        }
+
+        return modified ? text.getBytes(StandardCharsets.UTF_8) : null;
     }
 }
