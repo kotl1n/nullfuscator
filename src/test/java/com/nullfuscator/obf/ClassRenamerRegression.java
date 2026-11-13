@@ -54,6 +54,7 @@ public final class ClassRenamerRegression {
         mixinReferences("ru.ezdlc.mixin");
         mixinReferences("");
         mixinReferences(null);
+        pluginDescriptorRemapping();
     }
 
     private static void mixinReferences(String pkg) {
@@ -99,5 +100,41 @@ public final class ClassRenamerRegression {
         node.name = name;
         node.superName = "java/lang/Object";
         return node;
+    }
+
+    private static void pluginDescriptorRemapping() {
+        ObfContext context = new ObfContext(ObfConfig.parse("""
+                classRenamer { enabled: true, prefix: "a/", chars: [ "I", "l" ], depth: 3 }
+                """), 23L, new ObfLog(false), new NameGenerator(new String[] { "I", "l" }));
+
+        ClassNode mainNode = type("fixture/plugin/SamplePlugin");
+        mainNode.superName = "org/bukkit/plugin/java/JavaPlugin";
+        context.putClass(mainNode);
+
+        ClassNode helperNode = type("fixture/plugin/util/Helper");
+        context.putClass(helperNode);
+
+        String yaml = """
+                name: SamplePlugin
+                version: 1.0.0
+                main: fixture.plugin.SamplePlugin
+                author: Developer
+                """;
+        context.resources().put("plugin.yml", yaml.getBytes(StandardCharsets.UTF_8));
+
+        new ClassRenamer().transform(context);
+
+        check(context.getClass("fixture/plugin/SamplePlugin") == null,
+                "Plugin main class was not renamed");
+
+        byte[] updatedYamlBytes = context.resources().get("plugin.yml");
+        check(updatedYamlBytes != null, "plugin.yml missing from resources");
+        String updatedYaml = new String(updatedYamlBytes, StandardCharsets.UTF_8);
+
+        check(!updatedYaml.contains("fixture.plugin.SamplePlugin"),
+                "plugin.yml still contains original main class name");
+        check(updatedYaml.contains("main: a."),
+                "plugin.yml does not contain remapped dotted main class name: " + updatedYaml);
+        System.out.println("PASS plugin descriptor remapping: " + updatedYaml.trim().replace("\n", " | "));
     }
 }

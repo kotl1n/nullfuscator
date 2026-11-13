@@ -45,20 +45,76 @@ public final class Remapping {
 
     public static String mainClassInternalName(ObfContext ctx) {
         byte[] data = ctx.resources().get("META-INF/MANIFEST.MF");
-        if (data == null) {
-            return null;
-        }
-        try {
-            java.util.jar.Manifest mf = new java.util.jar.Manifest(new ByteArrayInputStream(data));
-            String mc = mf.getMainAttributes().getValue("Main-Class");
-            if (mc == null) {
-                return null;
+        if (data != null) {
+            try {
+                java.util.jar.Manifest mf = new java.util.jar.Manifest(new ByteArrayInputStream(data));
+                String mc = mf.getMainAttributes().getValue("Main-Class");
+                if (mc != null) {
+                    mc = mc.trim();
+                    if (!mc.isEmpty()) {
+                        return mc.replace('.', '/');
+                    }
+                }
+            } catch (Exception ignored) {
             }
-            mc = mc.trim();
-            return mc.isEmpty() ? null : mc.replace('.', '/');
-        } catch (Exception e) {
-            return null;
         }
+        for (String p : new String[] { "plugin.yml", "paper-plugin.yml", "bungee.yml" }) {
+            byte[] d = ctx.resources().get(p);
+            if (d != null) {
+                String mc = extractYamlMain(d);
+                if (mc != null && ctx.getClass(mc) != null) {
+                    return mc;
+                }
+            }
+        }
+        byte[] v = ctx.resources().get("velocity-plugin.json");
+        if (v != null) {
+            String mc = extractJsonMain(v);
+            if (mc != null && ctx.getClass(mc) != null) {
+                return mc;
+            }
+        }
+        for (ClassNode cn : ctx.classes()) {
+            if ("org/bukkit/plugin/java/JavaPlugin".equals(cn.superName)
+                    || "net/md_5/bungee/api/plugin/Plugin".equals(cn.superName)) {
+                return cn.name;
+            }
+        }
+        return null;
+    }
+
+    private static String extractYamlMain(byte[] data) {
+        String text = new String(data, StandardCharsets.UTF_8);
+        for (String line : text.split("\n")) {
+            int hash = line.indexOf('#');
+            if (hash >= 0) {
+                line = line.substring(0, hash);
+            }
+            int colon = line.indexOf(':');
+            if (colon >= 0) {
+                String key = line.substring(0, colon).trim();
+                if ("main".equals(key)) {
+                    String val = line.substring(colon + 1).trim();
+                    if ((val.startsWith("\"") && val.endsWith("\"") && val.length() >= 2)
+                            || (val.startsWith("'") && val.endsWith("'") && val.length() >= 2)) {
+                        val = val.substring(1, val.length() - 1).trim();
+                    }
+                    if (!val.isEmpty()) {
+                        return val.replace('.', '/');
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    private static String extractJsonMain(byte[] data) {
+        String text = new String(data, StandardCharsets.UTF_8);
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("\"main\"\\s*:\\s*\"([^\"]+)\"").matcher(text);
+        if (m.find()) {
+            return m.group(1).trim().replace('.', '/');
+        }
+        return null;
     }
 
     public static String mixinJsonBlob(ObfContext ctx) {
