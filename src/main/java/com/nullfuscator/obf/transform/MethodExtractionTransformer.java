@@ -2,6 +2,7 @@ package com.nullfuscator.obf.transform;
 
 import com.nullfuscator.obf.core.ObfContext;
 import com.nullfuscator.obf.core.Transformer;
+import com.nullfuscator.obf.util.BytecodeNoise;
 import org.objectweb.asm.ConstantDynamic;
 import org.objectweb.asm.Handle;
 import org.objectweb.asm.Opcodes;
@@ -199,9 +200,11 @@ public final class MethodExtractionTransformer implements Transformer {
             ClassNode cn = new ClassNode();
             cn.version = version;
             cn.access = Opcodes.ACC_PUBLIC | Opcodes.ACC_FINAL | Opcodes.ACC_SUPER;
-            cn.name = ctx.names().nextRandomClass("a/x/", ctx.random(), 9 + i % 8);
+            cn.name = ctx.names().nextRandomClass(BytecodeNoise.randomPackage(ctx, "x"), ctx.random(), 9 + i % 8);
             cn.superName = "java/lang/Object";
             cn.methods = new ArrayList<>();
+            cn.fields = new ArrayList<>();
+            BytecodeNoise.decorateCarrier(cn, ctx);
             ctx.putClass(cn);
             out.add(cn);
         }

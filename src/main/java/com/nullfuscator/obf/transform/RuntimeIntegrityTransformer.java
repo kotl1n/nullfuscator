@@ -27,21 +27,32 @@ public final class RuntimeIntegrityTransformer implements Transformer, Opcodes {
     @Override
     public void transform(ObfContext ctx) {
         var section = ctx.config().section(id());
-        var include = new ExemptMatcher(section.getStringList("include"));
-        if (include.isEmpty()) {
-            throw new IllegalArgumentException("runtimeIntegrity requires explicit include selectors");
+        List<String> rawInclude = section.getStringList("include");
+        ExemptMatcher include;
+        if (rawInclude.isEmpty() || rawInclude.contains("*")) {
+            String main = Remapping.mainClassInternalName(ctx);
+            if (main != null && ctx.getClass(main) != null && !ObfContext.isMixin(ctx.getClass(main))) {
+                include = new ExemptMatcher(List.of(main));
+            } else {
+                include = new ExemptMatcher(List.of(""));
+            }
+        } else {
+            include = new ExemptMatcher(rawInclude);
         }
 
         List<ClassNode> targets = ctx.targets(id()).stream()
-                .filter(c -> include.matches(ctx.originalName(c.name)))
+                .filter(c -> !ObfContext.isMixin(c))
+                .filter(c -> include.matches(ctx.originalName(c.name)) || include.matches(c.name))
                 .filter(c -> (c.access & (ACC_ANNOTATION | ACC_INTERFACE)) == 0)
                 .toList();
         if (targets.isEmpty()) {
-            throw new IllegalArgumentException("runtimeIntegrity matched no classes");
+            ctx.log().warn("runtimeIntegrity: no eligible classes matched, skipping integrity checks");
+            return;
         }
 
         if (ctx.isModularJar()) {
-            throw new IllegalArgumentException("runtimeIntegrity does not support modular JARs");
+            ctx.log().warn("runtimeIntegrity does not support modular JARs, skipping");
+            return;
         }
 
         Set<String> targetPaths = new HashSet<>();

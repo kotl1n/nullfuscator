@@ -8,6 +8,7 @@ import java.security.MessageDigest;
 /** Template copied per build. Checks archive resources, not the JVM's live class definitions. */
 public final class IntegrityGuard {
 
+    private static final String PREFIX = "nullfuscator-integrity-root:";
     private static volatile boolean initialized;
     private static volatile boolean failed;
     private static volatile long deadline;
@@ -36,17 +37,19 @@ public final class IntegrityGuard {
             try {
                 byte[] index = read("@NULLFUSCATOR_INDEX@", 4 * 1024 * 1024);
                 String expected = "nullfuscator-integrity-root:0000000000000000000000000000000000000000000000000000000000000000";
-                if (!hex(digest(index)).equals(expected.substring(21))) {
+                if (!hex(digest(index)).equals(expected.substring(PREFIX.length()))) {
                     throw new SecurityException("Integrity index changed");
                 }
 
                 if (!initialized) {
                     entries = new String(index, StandardCharsets.UTF_8).split("\n");
                     for (String entry : entries) {
+                        if (entry.isEmpty() || entry.isBlank()) {
+                            continue;
+                        }
                         verify(entry);
                     }
                 } else {
-                    // Bounded steady-state work: one resource per interval per guard.
                     verify(entries[cursor++ % entries.length]);
                     if (cursor == entries.length) {
                         cursor = 0;
@@ -97,8 +100,9 @@ public final class IntegrityGuard {
     }
 
     public static void normalize(byte[] bytes) {
-        byte[] prefix = "nullfuscator-integrity-root:".getBytes(StandardCharsets.US_ASCII);
-        for (int i = 0; i <= bytes.length - prefix.length - 64; i++) {
+        byte[] prefix = PREFIX.getBytes(StandardCharsets.US_ASCII);
+        int markerLen = prefix.length + 64;
+        for (int i = 0; i <= bytes.length - markerLen; i++) {
             boolean match = true;
             for (int j = 0; j < prefix.length; j++) {
                 if (bytes[i + j] != prefix[j]) {
@@ -110,8 +114,7 @@ public final class IntegrityGuard {
                 continue;
             }
 
-            // Constant-pool UTF8 payload is the only accepted marker, length 85.
-            if (i < 3 || bytes[i - 3] != 1 || bytes[i - 2] != 0 || bytes[i - 1] != 85) {
+            if (i < 3 || bytes[i - 3] != 1 || bytes[i - 2] != 0 || (bytes[i - 1] & 0xFF) != markerLen) {
                 continue;
             }
             for (int j = 0; j < 64; j++) {

@@ -3,6 +3,7 @@ package com.nullfuscator.obf.transform;
 import com.nullfuscator.obf.core.Limits;
 import com.nullfuscator.obf.core.ObfContext;
 import com.nullfuscator.obf.core.Transformer;
+import com.nullfuscator.obf.util.BytecodeNoise;
 import org.objectweb.asm.ConstantDynamic;
 import org.objectweb.asm.Handle;
 import org.objectweb.asm.Opcodes;
@@ -129,12 +130,14 @@ public final class CrossClassDispersionTransformer implements Transformer {
                     if (slot >= family.size() && helperCount < maxHelpers) {
                         int sinkIndex = helperCount % sinkCount;
                         if (sinkIndex == sinks.size()) {
+                            String pkg = BytecodeNoise.randomPackage(ctx, "d");
                             String name;
                             do {
-                                name = "a/d/" + ctx.names().next();
+                                name = pkg + ctx.names().next();
                             } while (ctx.getClass(name) != null);
 
                             ClassNode sink = buildSink(name, rnd, opaqueState);
+                            BytecodeNoise.decorateCarrier(sink, ctx);
                             ctx.markDispersionCarrier(sink);
                             ctx.putClass(sink);
                             sinks.add(sink);

@@ -39,6 +39,10 @@ public final class ConfigRegression {
         check(legacy.section("fieldRenamer").isExempt("legacy/Example"), "legacy exemption failed");
         check(legacy.section("fieldRenamer").enabled(), "legacy section failed");
 
+        ObfConfig integrityCfg = ObfConfig.parse("runtimeIntegrity { enabled: true, \"include\": [ \"sample/Main\" ] }");
+        check(integrityCfg.section("runtimeIntegrity").getStringList("include").contains("sample/Main"),
+                "runtimeIntegrity include list failed");
+
         System.out.println("PASS config defaults, overrides and legacy compatibility");
     }
 }

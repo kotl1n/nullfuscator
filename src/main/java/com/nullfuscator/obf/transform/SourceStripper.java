@@ -2,8 +2,12 @@ package com.nullfuscator.obf.transform;
 
 import com.nullfuscator.obf.core.ObfContext;
 import com.nullfuscator.obf.core.Transformer;
+import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
+import org.objectweb.asm.tree.LabelNode;
 import org.objectweb.asm.tree.LineNumberNode;
+import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 
 public final class SourceStripper implements Transformer {
@@ -33,8 +37,9 @@ public final class SourceStripper implements Transformer {
             cn.sourceFile = null;
             cn.sourceDebug = null;
 
+            boolean isMixin = ObfContext.isMixin(cn) || ctx.isMixinPackage(cn.name);
             boolean preserveSchema = cn.fields.stream().anyMatch(GsonSchemaTransformer::hasName)
-                    || isTypeToken(cn);
+                    || isTypeToken(cn) || isMixin;
 
             if (stripSignatures && !preserveSchema) {
                 cn.signature = null;
@@ -53,14 +58,14 @@ public final class SourceStripper implements Transformer {
                     mn.signature = null;
                 }
 
-                if (stripVars) {
+                if (stripVars && !isMixin) {
                     mn.localVariables = null;
                     if (mn.parameters != null) {
                         mn.parameters = null;
                     }
                 }
 
-                if (stripLines && mn.instructions != null) {
+                if (stripLines && !isMixin && mn.instructions != null) {
                     var it = mn.instructions.iterator();
                     while (it.hasNext()) {
                         var insn = it.next();
@@ -69,11 +74,56 @@ public final class SourceStripper implements Transformer {
                         }
                     }
                 }
+
+                if (isMixin && "<init>".equals(mn.name)) {
+                    ensureMixinConstructorLines(mn);
+                }
             }
             classes++;
         }
 
         ctx.log().debug("sourceStrip touched " + classes + " classes");
+    }
+
+    private static void ensureMixinConstructorLines(MethodNode mn) {
+        if (mn.instructions == null || mn.instructions.size() == 0) {
+            return;
+        }
+
+        AbstractInsnNode superInit = null;
+        boolean hasLineBeforeSuper = false;
+        for (AbstractInsnNode insn = mn.instructions.getFirst(); insn != null; insn = insn.getNext()) {
+            if (insn instanceof LineNumberNode) {
+                hasLineBeforeSuper = true;
+            }
+            if (insn.getOpcode() == Opcodes.INVOKESPECIAL
+                    && insn instanceof MethodInsnNode min
+                    && "<init>".equals(min.name)) {
+                superInit = insn;
+                break;
+            }
+        }
+
+        if (!hasLineBeforeSuper) {
+            LabelNode l0 = new LabelNode();
+            mn.instructions.insert(new LineNumberNode(1, l0));
+            mn.instructions.insert(l0);
+        }
+
+        if (superInit != null && superInit.getNext() != null) {
+            boolean hasLineAfterSuper = false;
+            for (AbstractInsnNode insn = superInit.getNext(); insn != null; insn = insn.getNext()) {
+                if (insn instanceof LineNumberNode) {
+                    hasLineAfterSuper = true;
+                    break;
+                }
+            }
+            if (!hasLineAfterSuper && superInit.getNext().getOpcode() != Opcodes.RETURN) {
+                LabelNode l1 = new LabelNode();
+                mn.instructions.insert(superInit, new LineNumberNode(2, l1));
+                mn.instructions.insert(superInit, l1);
+            }
+        }
     }
 
     private static boolean isTypeToken(ClassNode cn) {

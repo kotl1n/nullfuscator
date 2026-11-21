@@ -117,6 +117,45 @@ public final class Remapping {
         return null;
     }
 
+    public static boolean isMixinConfig(String path, byte[] data) {
+        if (path == null || !path.endsWith(".json")) {
+            return false;
+        }
+        if (path.endsWith(".mixins.json") || path.equals("mixins.json") || path.endsWith("/mixins.json")
+                || path.startsWith("mixins.") || path.contains("/mixins.")) {
+            return true;
+        }
+        if (data != null && data.length > 0) {
+            String text = new String(data, StandardCharsets.UTF_8);
+            return text.contains("\"package\"") && (text.contains("\"mixins\"")
+                    || text.contains("\"client\"") || text.contains("\"server\""));
+        }
+        return false;
+    }
+
+    public static String extractMixinPackage(byte[] data) {
+        if (data == null || data.length == 0) {
+            return null;
+        }
+        String text = new String(data, StandardCharsets.UTF_8);
+        for (String line : text.split("\n")) {
+            int colon = line.indexOf(':');
+            if (colon >= 0) {
+                String k = line.substring(0, colon).trim().replace("\"", "");
+                if ("package".equals(k)) {
+                    String v = line.substring(colon + 1).trim();
+                    if (v.endsWith(",")) {
+                        v = v.substring(0, v.length() - 1).trim();
+                    }
+                    if (v.startsWith("\"") && v.endsWith("\"") && v.length() >= 2) {
+                        return v.substring(1, v.length() - 1).trim();
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
     public static String mixinJsonBlob(ObfContext ctx) {
         StringBuilder sb = new StringBuilder();
         for (Map.Entry<String, byte[]> e : ctx.resources().entrySet()) {
@@ -124,7 +163,7 @@ public final class Remapping {
             if (key == null) {
                 continue;
             }
-            if (key.endsWith(".mixins.json") || key.equals("fabric.mod.json")
+            if (isMixinConfig(key, e.getValue()) || key.equals("fabric.mod.json")
                     || key.endsWith("/fabric.mod.json")) {
                 sb.append(new String(e.getValue(), StandardCharsets.UTF_8)).append('\n');
             }
@@ -132,8 +171,11 @@ public final class Remapping {
         return sb.toString();
     }
 
-    /** Classes named by known runtime resources must retain their external names. */
     public static Set<String> resourceClassReferences(ObfContext ctx) {
+        return resourceClassReferences(ctx, true);
+    }
+
+    public static Set<String> resourceClassReferences(ObfContext ctx, boolean includeMixins) {
         Set<String> references = new HashSet<>();
 
         for (Map.Entry<String, byte[]> entry : ctx.resources().entrySet()) {
@@ -146,7 +188,7 @@ public final class Remapping {
                 } catch (RuntimeException e) {
                     ctx.log().warn("cannot inspect class references in " + path);
                 }
-            } else if (path.endsWith(".mixins.json")) {
+            } else if (includeMixins && isMixinConfig(path, entry.getValue())) {
                 try {
                     var config = ConfigFactory.parseString(text);
                     String pkg = config.hasPath("package") ? config.getString("package") : "";
