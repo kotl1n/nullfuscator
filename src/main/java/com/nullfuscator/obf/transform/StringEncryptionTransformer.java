@@ -80,6 +80,9 @@ public final class StringEncryptionTransformer implements Transformer {
                 if (com.nullfuscator.obf.core.Limits.oversizeMethod(mn)) {
                     continue;
                 }
+                if ((ObfContext.isMixin(cn) || ctx.isMixinPackage(cn.name)) && (mn.name.equals("<init>") || mn.name.equals("<clinit>"))) {
+                    continue;
+                }
 
                 for (AbstractInsnNode insn : mn.instructions.toArray()) {
                     if (insn instanceof LdcInsnNode ldc && ldc.cst instanceof String) {

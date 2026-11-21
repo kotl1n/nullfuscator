@@ -51,6 +51,66 @@ public final class MixinProtectionRegression {
                 throw new AssertionError("full pipeline changed injectable Mixin code");
             System.out.println("PASS full pipeline preserves Mixin hooks and @Final shadows; visible=" + visible);
         }
+        testMixinConstructorLinePreservation(pipeline);
+    }
+
+    private static void testMixinConstructorLinePreservation(List<Transformer> pipeline) {
+        ObfContext ctx = new ObfContext(ObfConfig.loadPreset("full"), 42,
+                new ObfLog(false), new NameGenerator(new String[] { "I", "l" }));
+        ClassNode mixin = new ClassNode();
+        mixin.version = Opcodes.V17;
+        mixin.access = Opcodes.ACC_PUBLIC;
+        mixin.name = "fixture/InitMixin";
+        mixin.superName = "java/lang/Object";
+        mixin.visibleAnnotations = new ArrayList<>(List.of(new AnnotationNode(
+                "Lorg/spongepowered/asm/mixin/Mixin;")));
+        FieldNode fn = new FieldNode(Opcodes.ACC_PRIVATE | Opcodes.ACC_FINAL,
+                "matrices", "Ljava/lang/Object;", null, null);
+        fn.visibleAnnotations = new ArrayList<>(List.of(new AnnotationNode(
+                "Lorg/spongepowered/asm/mixin/Unique;")));
+        mixin.fields.add(fn);
+
+        MethodNode ctor = new MethodNode(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null);
+        LabelNode l0 = new LabelNode();
+        LabelNode l1 = new LabelNode();
+        ctor.instructions.add(l0);
+        ctor.instructions.add(new LineNumberNode(47, l0));
+        ctor.instructions.add(new VarInsnNode(Opcodes.ALOAD, 0));
+        ctor.instructions.add(new MethodInsnNode(Opcodes.INVOKESPECIAL,
+                "java/lang/Object", "<init>", "()V", false));
+        ctor.instructions.add(l1);
+        ctor.instructions.add(new LineNumberNode(72, l1));
+        ctor.instructions.add(new VarInsnNode(Opcodes.ALOAD, 0));
+        ctor.instructions.add(new TypeInsnNode(Opcodes.NEW, "java/lang/Object"));
+        ctor.instructions.add(new InsnNode(Opcodes.DUP));
+        ctor.instructions.add(new MethodInsnNode(Opcodes.INVOKESPECIAL,
+                "java/lang/Object", "<init>", "()V", false));
+        ctor.instructions.add(new FieldInsnNode(Opcodes.PUTFIELD, mixin.name, fn.name, "Ljava/lang/Object;"));
+        ctor.instructions.add(new InsnNode(Opcodes.RETURN));
+        mixin.methods.add(ctor);
+
+        ctx.putClass(mixin);
+        new ObfEngine(pipeline).run(ctx);
+
+        ClassNode result = ctx.getClass(mixin.name);
+        if (result == null) {
+            throw new AssertionError("mixin class was removed");
+        }
+        MethodNode resultCtor = result.methods.stream()
+                .filter(m -> "<init>".equals(m.name))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("constructor was removed"));
+
+        List<Integer> lines = new ArrayList<>();
+        for (AbstractInsnNode insn = resultCtor.instructions.getFirst(); insn != null; insn = insn.getNext()) {
+            if (insn instanceof LineNumberNode lnn) {
+                lines.add(lnn.line);
+            }
+        }
+        if (lines.isEmpty() || !lines.contains(47) || !lines.contains(72)) {
+            throw new AssertionError("lines were stripped from mixin constructor: " + lines);
+        }
+        System.out.println("PASS mixin constructor preserves line numbers for Sponge Mixin initialiser range");
     }
 
     private static String trace(ClassNode node) {

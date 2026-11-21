@@ -12,6 +12,8 @@ import java.util.Set;
 /** Sealed only after frame computation and every bytecode pass have completed. */
 public record IntegrityPlan(String resource, Set<String> classes, Set<String> guards) {
 
+    private static final String PREFIX = "nullfuscator-integrity-root:";
+
     public byte[] seal(Map<String, byte[]> bytecode) {
         StringBuilder index = new StringBuilder();
         classes.stream().sorted().forEach(name -> {
@@ -29,7 +31,8 @@ public record IntegrityPlan(String resource, Set<String> classes, Set<String> gu
 
         byte[] manifest = index.toString().getBytes(StandardCharsets.UTF_8);
         byte[] root = hash(manifest).getBytes(StandardCharsets.US_ASCII);
-        byte[] marker = ("nullfuscator-integrity-root:" + "0".repeat(64))
+        byte[] prefixBytes = PREFIX.getBytes(StandardCharsets.US_ASCII);
+        byte[] marker = (PREFIX + "0".repeat(64))
                 .getBytes(StandardCharsets.US_ASCII);
 
         for (String name : guards) {
@@ -37,7 +40,7 @@ public record IntegrityPlan(String resource, Set<String> classes, Set<String> gu
             int patched = 0;
 
             for (int i = 3; i <= bytes.length - marker.length; i++) {
-                if (bytes[i - 3] != 1 || bytes[i - 2] != 0 || bytes[i - 1] != marker.length) {
+                if (bytes[i - 3] != 1 || bytes[i - 2] != 0 || (bytes[i - 1] & 0xFF) != marker.length) {
                     continue;
                 }
                 boolean match = true;
@@ -48,7 +51,7 @@ public record IntegrityPlan(String resource, Set<String> classes, Set<String> gu
                     }
                 }
                 if (match) {
-                    System.arraycopy(root, 0, bytes, i + 21, root.length);
+                    System.arraycopy(root, 0, bytes, i + prefixBytes.length, root.length);
                     patched++;
                 }
             }

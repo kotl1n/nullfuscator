@@ -3,6 +3,7 @@ package com.nullfuscator.obf.transform;
 import com.nullfuscator.obf.core.Limits;
 import com.nullfuscator.obf.core.ObfContext;
 import com.nullfuscator.obf.core.Transformer;
+import com.nullfuscator.obf.util.BytecodeNoise;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.*;
@@ -136,9 +137,11 @@ public final class MethodRelocationTransformer implements Transformer {
             ClassNode cn = new ClassNode();
             cn.version = version;
             cn.access = Opcodes.ACC_PUBLIC | Opcodes.ACC_FINAL | Opcodes.ACC_SUPER;
-            cn.name = ctx.names().nextRandomClass("a/m/", ctx.random(), 8 + i % 7);
+            cn.name = ctx.names().nextRandomClass(BytecodeNoise.randomPackage(ctx, "m"), ctx.random(), 8 + i % 7);
             cn.superName = "java/lang/Object";
             cn.methods = new ArrayList<>();
+            cn.fields = new ArrayList<>();
+            BytecodeNoise.decorateCarrier(cn, ctx);
             ctx.putClass(cn);
             out.add(cn);
         }

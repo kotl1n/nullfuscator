@@ -60,7 +60,7 @@ public final class FieldRenamer implements Transformer {
             }
         }
 
-        String mixinBlob = Remapping.mixinJsonBlob(ctx);
+        String mixinBlob = ctx.config().exemptMixins() ? Remapping.mixinJsonBlob(ctx) : "";
 
         final Map<String, String> renameFields = new HashMap<>();
         for (ClassNode cn : ctx.targets(id())) {
@@ -73,11 +73,14 @@ public final class FieldRenamer implements Transformer {
             }
 
             for (FieldNode fn : cn.fields) {
+                if (cannotRenameMixinField(cn, fn)) {
+                    continue;
+                }
                 if (section.getBoolean("annotatedOnly", false) && !GsonSchemaTransformer.hasName(fn)) {
                     continue;
                 }
                 if (fn.visibleAnnotations != null && fn.visibleAnnotations.stream()
-                        .anyMatch(a -> !GsonSchemaTransformer.isGsonAnnotation(a.desc))) {
+                        .anyMatch(a -> !GsonSchemaTransformer.isGsonAnnotation(a.desc) && !UNIQUE_DESC.equals(a.desc))) {
                     continue;
                 }
                 if ("serialVersionUID".equals(fn.name) || "serialPersistentFields".equals(fn.name)) {
@@ -143,11 +146,40 @@ public final class FieldRenamer implements Transformer {
         ctx.log().debug("fieldRenamer renamed " + renameFields.size() + " fields");
     }
 
+    private static final String SHADOW_DESC = "Lorg/spongepowered/asm/mixin/Shadow;";
+    private static final String UNIQUE_DESC = "Lorg/spongepowered/asm/mixin/Unique;";
+
     private static boolean reflectionSensitive(ClassNode cn) {
         if (cn.visibleAnnotations != null && !cn.visibleAnnotations.isEmpty()) {
-            return true;
+            for (var a : cn.visibleAnnotations) {
+                if (a.desc != null && a.desc.startsWith("Lorg/spongepowered/asm/mixin/")) {
+                    continue;
+                }
+                return true;
+            }
         }
         return false;
+    }
+
+    private static boolean cannotRenameMixinField(ClassNode cn, FieldNode fn) {
+        if (hasFieldAnnotation(fn, SHADOW_DESC)) {
+            return true;
+        }
+        if (ObfContext.isMixin(cn)) {
+            boolean isPrivate = (fn.access & Opcodes.ACC_PRIVATE) != 0;
+            boolean isUnique = hasFieldAnnotation(fn, UNIQUE_DESC);
+            if (!isPrivate && !isUnique) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean hasFieldAnnotation(FieldNode fn, String desc) {
+        if (fn.visibleAnnotations != null && fn.visibleAnnotations.stream().anyMatch(a -> desc.equals(a.desc))) {
+            return true;
+        }
+        return fn.invisibleAnnotations != null && fn.invisibleAnnotations.stream().anyMatch(a -> desc.equals(a.desc));
     }
 
     private static String key(String owner, String name, String desc) {

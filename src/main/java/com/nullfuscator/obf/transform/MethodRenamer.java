@@ -21,7 +21,12 @@ public final class MethodRenamer implements Transformer {
 
     private static final String[] DEFAULT_ALPHABET = { "I", "l1", "lI", "1l", "ll", "Il" };
     private static final String SEP = ".";
-    private static final String MIXIN_PREFIX = "Lorg/spongepowered/asm/mixin/";
+    private static final Set<String> PRESERVED_MIXIN_ANNOTATIONS = Set.of(
+            "Lorg/spongepowered/asm/mixin/Shadow;",
+            "Lorg/spongepowered/asm/mixin/Overwrite;",
+            "Lorg/spongepowered/asm/mixin/gen/Accessor;",
+            "Lorg/spongepowered/asm/mixin/gen/Invoker;"
+    );
 
     @Override
     public String id() {
@@ -92,7 +97,7 @@ public final class MethodRenamer implements Transformer {
                 if (isRecordAccessor(cn, mn)) {
                     continue;
                 }
-                if (hasMixinAnnotation(mn)) {
+                if (cannotRenameMixinMethod(cn, mn)) {
                     continue;
                 }
                 if (matchesNonOwnedSuper(cn.name, mn.name, mn.desc, all, superOf, ifacesOf, libLoader)) {
@@ -127,7 +132,7 @@ public final class MethodRenamer implements Transformer {
                     if (!targetOwners.contains(cn.name)
                             || (cn.access & Opcodes.ACC_ANNOTATION) != 0
                             || isRecordAccessor(cn, mn)
-                            || hasMixinAnnotation(mn)
+                            || cannotRenameMixinMethod(cn, mn)
                             || (!renamePublic && (mn.access & Opcodes.ACC_PUBLIC) != 0)
                             || matchesNonOwnedSuper(cn.name, mn.name, mn.desc,
                                     all, superOf, ifacesOf, libLoader)) {
@@ -266,16 +271,33 @@ public final class MethodRenamer implements Transformer {
         };
     }
 
-    private static boolean hasMixinAnnotation(MethodNode mn) {
-        return hasMixin(mn.visibleAnnotations) || hasMixin(mn.invisibleAnnotations);
+    private static boolean cannotRenameMixinMethod(ClassNode cn, MethodNode mn) {
+        if (hasAnnotation(mn.visibleAnnotations, PRESERVED_MIXIN_ANNOTATIONS)
+                || hasAnnotation(mn.invisibleAnnotations, PRESERVED_MIXIN_ANNOTATIONS)) {
+            return true;
+        }
+        if (ObfContext.isMixin(cn)) {
+            boolean isPrivate = (mn.access & Opcodes.ACC_PRIVATE) != 0;
+            boolean isUnique = hasUniqueAnnotation(mn);
+            if (!isPrivate && !isUnique) {
+                return true;
+            }
+        }
+        return false;
     }
 
-    private static boolean hasMixin(List<AnnotationNode> anns) {
+    private static boolean hasUniqueAnnotation(MethodNode mn) {
+        String unique = "Lorg/spongepowered/asm/mixin/Unique;";
+        return (mn.visibleAnnotations != null && mn.visibleAnnotations.stream().anyMatch(a -> unique.equals(a.desc)))
+                || (mn.invisibleAnnotations != null && mn.invisibleAnnotations.stream().anyMatch(a -> unique.equals(a.desc)));
+    }
+
+    private static boolean hasAnnotation(List<AnnotationNode> anns, Set<String> targetDescs) {
         if (anns == null) {
             return false;
         }
         for (AnnotationNode an : anns) {
-            if (an.desc != null && an.desc.startsWith(MIXIN_PREFIX)) {
+            if (an.desc != null && targetDescs.contains(an.desc)) {
                 return true;
             }
         }

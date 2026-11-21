@@ -185,6 +185,16 @@ public final class ObfConfig {
         return root.hasPathOrNull("libs") ? safeStringList(root, "libs") : Collections.emptyList();
     }
 
+    public boolean exemptMixins() {
+        if (root.hasPath("defaults.partialMixins") && root.getBoolean("defaults.partialMixins")) {
+            return false;
+        }
+        if (root.hasPath("defaults.exemptMixins")) {
+            return root.getBoolean("defaults.exemptMixins");
+        }
+        return true;
+    }
+
     public Section section(String id) {
         return sections.computeIfAbsent(id, key -> {
             boolean present = root.hasPath(key);

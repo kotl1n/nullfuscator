@@ -54,15 +54,16 @@ public final class ClassRenamer implements Transformer {
             gen.reserve(existing);
         }
 
+        boolean exemptMixins = ctx.config().exemptMixins();
         Set<String> protectedNames = new HashSet<>();
-        protectedNames.addAll(Remapping.resourceClassReferences(ctx));
+        protectedNames.addAll(Remapping.resourceClassReferences(ctx, exemptMixins));
 
         String mainClass = Remapping.mainClassInternalName(ctx);
         if (!renameMain && mainClass != null) {
             protectedNames.add(mainClass);
         }
 
-        String mixinBlob = Remapping.mixinJsonBlob(ctx);
+        String mixinBlob = exemptMixins ? Remapping.mixinJsonBlob(ctx) : "";
 
         Set<String> candidates = new HashSet<>();
         for (ClassNode cn : ctx.targets(id())) {
@@ -82,10 +83,21 @@ public final class ClassRenamer implements Transformer {
 
         Set<String> pinnedPackages = new HashSet<>();
         Set<String> occupiedPackages = new HashSet<>();
+        for (Map.Entry<String, byte[]> entry : ctx.resources().entrySet()) {
+            if (Remapping.isMixinConfig(entry.getKey(), entry.getValue())) {
+                String p = Remapping.extractMixinPackage(entry.getValue());
+                if (p != null && !p.isEmpty()) {
+                    pinnedPackages.add(p.replace('.', '/') + "/");
+                }
+            }
+        }
         for (ClassNode cn : ctx.classes()) {
             String pkg = packagePrefix(cn.name);
             occupiedPackages.add(pkg);
             if (!candidates.contains(cn.name)) {
+                pinnedPackages.add(pkg);
+            }
+            if (ObfContext.isMixin(cn)) {
                 pinnedPackages.add(pkg);
             }
             cn.accept(new ClassRemapper(new ClassNode(), new Remapper(Opcodes.ASM9) {
@@ -142,6 +154,7 @@ public final class ClassRenamer implements Transformer {
         rewriteManifestEntrypoints(ctx, classMap);
         rewriteServiceDescriptors(ctx, classMap);
         rewritePluginDescriptors(ctx, classMap);
+        rewriteMixinDescriptors(ctx, classMap);
 
         ctx.log().debug("classRenamer renamed " + classMap.size() + " classes");
     }
@@ -415,6 +428,175 @@ public final class ClassRenamer implements Transformer {
             }
         }
 
+        return modified ? text.getBytes(StandardCharsets.UTF_8) : null;
+    }
+
+    private static void rewriteMixinDescriptors(ObfContext ctx, Map<String, String> classMap) {
+        if (classMap.isEmpty()) {
+            return;
+        }
+
+        for (Map.Entry<String, byte[]> entry : ctx.resources().entrySet()) {
+            String path = entry.getKey();
+            if (path == null) {
+                continue;
+            }
+
+            if (Remapping.isMixinConfig(path, entry.getValue())) {
+                byte[] data = entry.getValue();
+                byte[] updated = remapMixinConfigJson(data, classMap);
+                if (updated != null) {
+                    entry.setValue(updated);
+                    ctx.log().debug("classRenamer updated mixin config: " + path);
+                }
+            } else if (path.endsWith(".refmap.json")) {
+                byte[] data = entry.getValue();
+                byte[] updated = remapRefmapJson(data, classMap);
+                if (updated != null) {
+                    entry.setValue(updated);
+                    ctx.log().debug("classRenamer updated refmap: " + path);
+                }
+            } else if (path.equals("fabric.mod.json") || path.endsWith("/fabric.mod.json")) {
+                byte[] data = entry.getValue();
+                byte[] updated = remapFabricModJson(data, classMap);
+                if (updated != null) {
+                    entry.setValue(updated);
+                    ctx.log().debug("classRenamer updated fabric.mod.json: " + path);
+                }
+            }
+        }
+    }
+
+    private static byte[] remapMixinConfigJson(byte[] data, Map<String, String> classMap) {
+        String text = new String(data, StandardCharsets.UTF_8);
+        String[] lines = text.split("\n", -1);
+        String pkg = null;
+        for (String line : lines) {
+            int colon = line.indexOf(':');
+            if (colon >= 0) {
+                String k = line.substring(0, colon).trim().replace("\"", "");
+                if ("package".equals(k)) {
+                    String v = line.substring(colon + 1).trim();
+                    if (v.endsWith(",")) {
+                        v = v.substring(0, v.length() - 1).trim();
+                    }
+                    if (v.startsWith("\"") && v.endsWith("\"") && v.length() >= 2) {
+                        pkg = v.substring(1, v.length() - 1).trim();
+                    }
+                    break;
+                }
+            }
+        }
+
+        boolean modified = false;
+        StringBuilder sb = new StringBuilder(text.length());
+        for (int i = 0; i < lines.length; i++) {
+            String line = lines[i];
+            String rewritten = remapMixinJsonLine(line, pkg, classMap);
+            if (!rewritten.equals(line)) {
+                modified = true;
+                line = rewritten;
+            }
+            sb.append(line);
+            if (i + 1 < lines.length) {
+                sb.append('\n');
+            }
+        }
+
+        return modified ? sb.toString().getBytes(StandardCharsets.UTF_8) : null;
+    }
+
+    private static String remapMixinJsonLine(String line, String pkg, Map<String, String> classMap) {
+        int firstQuote = line.indexOf('"');
+        if (firstQuote < 0) {
+            return line;
+        }
+
+        int colon = line.indexOf(':');
+        if (colon >= 0) {
+            String k = line.substring(0, colon).trim().replace("\"", "");
+            if ("plugin".equals(k)) {
+                String valPart = line.substring(colon + 1);
+                for (Map.Entry<String, String> e : classMap.entrySet()) {
+                    String oldDot = e.getKey().replace('/', '.');
+                    String newDot = e.getValue().replace('/', '.');
+                    if (valPart.contains("\"" + oldDot + "\"")) {
+                        return line.substring(0, colon + 1) + valPart.replace("\"" + oldDot + "\"", "\"" + newDot + "\"");
+                    }
+                }
+            }
+        }
+
+        int start = 0;
+        StringBuilder out = new StringBuilder();
+        boolean replaced = false;
+
+        while (start < line.length()) {
+            int q1 = line.indexOf('"', start);
+            if (q1 < 0) {
+                out.append(line.substring(start));
+                break;
+            }
+            int q2 = line.indexOf('"', q1 + 1);
+            if (q2 < 0) {
+                out.append(line.substring(start));
+                break;
+            }
+
+            out.append(line, start, q1);
+            String token = line.substring(q1 + 1, q2);
+            String replacement = token;
+
+            if (!token.isEmpty() && !token.contains(" ") && !token.contains("{") && !token.contains("}")) {
+                String fullDotted = (pkg != null && !pkg.isEmpty()) ? (pkg + "." + token) : token;
+                String internal = fullDotted.replace('.', '/');
+                String mapped = classMap.get(internal);
+                if (mapped != null) {
+                    String prefix = (pkg != null && !pkg.isEmpty()) ? (pkg.replace('.', '/') + "/") : "";
+                    if (!prefix.isEmpty() && mapped.startsWith(prefix)) {
+                        replacement = mapped.substring(prefix.length()).replace('/', '.');
+                    } else {
+                        replacement = mapped.replace('/', '.');
+                    }
+                    replaced = true;
+                } else if (classMap.containsKey(token.replace('.', '/'))) {
+                    replacement = classMap.get(token.replace('.', '/')).replace('/', '.');
+                    replaced = true;
+                }
+            }
+
+            out.append('"').append(replacement).append('"');
+            start = q2 + 1;
+        }
+
+        return replaced ? out.toString() : line;
+    }
+
+    private static byte[] remapRefmapJson(byte[] data, Map<String, String> classMap) {
+        String text = new String(data, StandardCharsets.UTF_8);
+        boolean modified = false;
+        for (Map.Entry<String, String> e : classMap.entrySet()) {
+            String oldKey = "\"" + e.getKey() + "\"";
+            String newKey = "\"" + e.getValue() + "\"";
+            if (text.contains(oldKey)) {
+                text = text.replace(oldKey, newKey);
+                modified = true;
+            }
+        }
+        return modified ? text.getBytes(StandardCharsets.UTF_8) : null;
+    }
+
+    private static byte[] remapFabricModJson(byte[] data, Map<String, String> classMap) {
+        String text = new String(data, StandardCharsets.UTF_8);
+        boolean modified = false;
+        for (Map.Entry<String, String> e : classMap.entrySet()) {
+            String oldDotted = "\"" + e.getKey().replace('/', '.') + "\"";
+            String newDotted = "\"" + e.getValue().replace('/', '.') + "\"";
+            if (text.contains(oldDotted)) {
+                text = text.replace(oldDotted, newDotted);
+                modified = true;
+            }
+        }
         return modified ? text.getBytes(StandardCharsets.UTF_8) : null;
     }
 }

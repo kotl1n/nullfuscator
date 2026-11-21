@@ -2,6 +2,7 @@ package com.nullfuscator.obf.transform;
 
 import com.nullfuscator.obf.core.ObfContext;
 import com.nullfuscator.obf.core.Transformer;
+import com.nullfuscator.obf.util.BytecodeNoise;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.*;
@@ -117,13 +118,16 @@ public final class SemanticFabricTransformer implements Transformer {
         }
 
         List<ClassNode> out = new ArrayList<>();
+        String pkg = BytecodeNoise.randomPackage(ctx, "sf");
         for (int i = 0; i < count; i++) {
             ClassNode cn = new ClassNode();
             cn.version = version;
             cn.access = Opcodes.ACC_PUBLIC | Opcodes.ACC_FINAL | Opcodes.ACC_SYNTHETIC;
-            cn.name = ctx.names().nextRandomClass("ez/sf/", ctx.random(), 7 + i % 5);
+            cn.name = ctx.names().nextRandomClass(pkg, ctx.random(), 7 + i % 5);
             cn.superName = "java/lang/Object";
+            cn.fields = new ArrayList<>();
             cn.methods = new ArrayList<>();
+            BytecodeNoise.decorateCarrier(cn, ctx);
             ctx.putClass(cn);
             out.add(cn);
         }

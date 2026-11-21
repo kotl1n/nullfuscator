@@ -55,6 +55,7 @@ public final class ClassRenamerRegression {
         mixinReferences("");
         mixinReferences(null);
         pluginDescriptorRemapping();
+        partialMixinRemapping();
     }
 
     private static void mixinReferences(String pkg) {
@@ -136,5 +137,62 @@ public final class ClassRenamerRegression {
         check(updatedYaml.contains("main: a."),
                 "plugin.yml does not contain remapped dotted main class name: " + updatedYaml);
         System.out.println("PASS plugin descriptor remapping: " + updatedYaml.trim().replace("\n", " | "));
+    }
+
+    private static void partialMixinRemapping() {
+        ObfContext context = new ObfContext(ObfConfig.parse("""
+                defaults { partialMixins: true }
+                classRenamer { enabled: true, chars: [ "I", "l" ], depth: 3 }
+                """), 23L, new ObfLog(false), new NameGenerator(new String[] { "I", "l" }));
+
+        String pkg = "com.sample.mod.mixin";
+        String prefix = pkg.replace('.', '/') + "/";
+        String[] mixins = { "SampleEntityMixin", "SampleScreenMixin" };
+        for (String m : mixins) {
+            ClassNode node = type(prefix + m);
+            node.visibleAnnotations = new ArrayList<>(java.util.List.of(
+                    new org.objectweb.asm.tree.AnnotationNode("Lorg/spongepowered/asm/mixin/Mixin;")));
+            context.putClass(node);
+        }
+
+        String json = """
+                {
+                  "package": "com.sample.mod.mixin",
+                  "client": [
+                    "SampleEntityMixin",
+                    "SampleScreenMixin"
+                  ]
+                }
+                """;
+        context.resources().put("mixins.json", json.getBytes(StandardCharsets.UTF_8));
+
+        String refmap = """
+                {
+                  "mappings": {
+                    "com/sample/mod/mixin/SampleEntityMixin": {
+                      "render": "m_1234"
+                    }
+                  }
+                }
+                """;
+        context.resources().put("sample.refmap.json", refmap.getBytes(StandardCharsets.UTF_8));
+
+        new ClassRenamer().transform(context);
+
+        check(context.getClass(prefix + "SampleEntityMixin") == null, "SampleEntityMixin was not renamed under partialMixins");
+        check(context.getClass(prefix + "SampleScreenMixin") == null, "SampleScreenMixin was not renamed under partialMixins");
+
+        byte[] updatedJsonBytes = context.resources().get("mixins.json");
+        String updatedJson = new String(updatedJsonBytes, StandardCharsets.UTF_8);
+        check(!updatedJson.contains("SampleEntityMixin"), "mixins.json still contains SampleEntityMixin");
+        check(!updatedJson.contains("SampleScreenMixin"), "mixins.json still contains SampleScreenMixin");
+        check(updatedJson.contains("\"package\": \"com.sample.mod.mixin\""), "package changed in mixins.json");
+
+        byte[] updatedRefmapBytes = context.resources().get("sample.refmap.json");
+        String updatedRefmap = new String(updatedRefmapBytes, StandardCharsets.UTF_8);
+        check(!updatedRefmap.contains("com/sample/mod/mixin/SampleEntityMixin"), "refmap still contains old mixin name");
+        check(updatedRefmap.contains("com/sample/mod/mixin/"), "refmap does not contain new mixin name");
+
+        System.out.println("PASS partial mixin remapping: mixins.json and refmap updated successfully");
     }
 }

@@ -44,6 +44,9 @@ public final class NumberEncryptionTransformer implements Transformer {
                 if (com.nullfuscator.obf.core.Limits.oversizeMethod(mn)) {
                     continue;
                 }
+                if (mn.name.equals("<init>") || mn.name.equals("<clinit>")) {
+                    continue;
+                }
 
                 for (AbstractInsnNode insn : mn.instructions.toArray()) {
                     InsnList repl = null;

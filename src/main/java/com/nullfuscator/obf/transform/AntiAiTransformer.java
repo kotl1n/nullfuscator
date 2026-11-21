@@ -66,6 +66,9 @@ public final class AntiAiTransformer implements Transformer {
                 if (mn.instructions == null) {
                     continue;
                 }
+                if (mn.name.equals("<init>") || mn.name.equals("<clinit>")) {
+                    continue;
+                }
 
                 int scratch = freeSlot(mn);
                 for (AbstractInsnNode insn : mn.instructions.toArray()) {
@@ -144,18 +147,57 @@ public final class AntiAiTransformer implements Transformer {
         net.decode(repl, value);
         repl.add(new VarInsnNode(Opcodes.ISTORE, slot));
 
-        repl.add(new VarInsnNode(Opcodes.ILOAD, slot));
-        pushInt(repl, m);
-        repl.add(new InsnNode(Opcodes.IAND));
-        repl.add(new VarInsnNode(Opcodes.ILOAD, slot));
-        pushInt(repl, m);
-        repl.add(new InsnNode(Opcodes.IOR));
-        repl.add(new InsnNode(Opcodes.IADD));
-        repl.add(new VarInsnNode(Opcodes.ILOAD, slot));
-        pushInt(repl, m);
-        repl.add(new InsnNode(Opcodes.IADD));
-        repl.add(new InsnNode(Opcodes.ISUB));
-        repl.add(new JumpInsnNode(Opcodes.IFEQ, cont));
+        int formula = ctx.random().nextInt(4);
+        switch (formula) {
+            case 0 -> {
+                repl.add(new VarInsnNode(Opcodes.ILOAD, slot));
+                pushInt(repl, m);
+                repl.add(new InsnNode(Opcodes.IAND));
+                repl.add(new VarInsnNode(Opcodes.ILOAD, slot));
+                pushInt(repl, m);
+                repl.add(new InsnNode(Opcodes.IOR));
+                repl.add(new InsnNode(Opcodes.IADD));
+                repl.add(new VarInsnNode(Opcodes.ILOAD, slot));
+                pushInt(repl, m);
+                repl.add(new InsnNode(Opcodes.IADD));
+                repl.add(new InsnNode(Opcodes.ISUB));
+                repl.add(new JumpInsnNode(Opcodes.IFEQ, cont));
+            }
+            case 1 -> {
+                repl.add(new VarInsnNode(Opcodes.ILOAD, slot));
+                pushInt(repl, m);
+                repl.add(new InsnNode(Opcodes.IOR));
+                repl.add(new VarInsnNode(Opcodes.ILOAD, slot));
+                pushInt(repl, m);
+                repl.add(new InsnNode(Opcodes.IXOR));
+                repl.add(new InsnNode(Opcodes.ISUB));
+                repl.add(new VarInsnNode(Opcodes.ILOAD, slot));
+                pushInt(repl, m);
+                repl.add(new InsnNode(Opcodes.IAND));
+                repl.add(new InsnNode(Opcodes.ISUB));
+                repl.add(new JumpInsnNode(Opcodes.IFEQ, cont));
+            }
+            case 2 -> {
+                repl.add(new VarInsnNode(Opcodes.ILOAD, slot));
+                repl.add(new InsnNode(Opcodes.ICONST_2));
+                repl.add(new InsnNode(Opcodes.IMUL));
+                repl.add(new VarInsnNode(Opcodes.ILOAD, slot));
+                repl.add(new InsnNode(Opcodes.ISUB));
+                repl.add(new VarInsnNode(Opcodes.ILOAD, slot));
+                repl.add(new InsnNode(Opcodes.ISUB));
+                repl.add(new JumpInsnNode(Opcodes.IFEQ, cont));
+            }
+            default -> {
+                repl.add(new VarInsnNode(Opcodes.ILOAD, slot));
+                pushInt(repl, m);
+                repl.add(new InsnNode(Opcodes.IXOR));
+                pushInt(repl, m);
+                repl.add(new InsnNode(Opcodes.IXOR));
+                repl.add(new VarInsnNode(Opcodes.ILOAD, slot));
+                repl.add(new InsnNode(Opcodes.ISUB));
+                repl.add(new JumpInsnNode(Opcodes.IFEQ, cont));
+            }
+        }
 
         int decoy = value ^ (1 + ctx.random().nextInt(0x3fffffff));
         net.decode(repl, decoy);
